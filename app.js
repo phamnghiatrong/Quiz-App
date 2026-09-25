@@ -1325,10 +1325,15 @@ elements.reviewCard = reviewCard;
   syncPausedQuizButtons(); // Update continue buttons
 }
 
+// Hiển thị tên môn học dạng IN HOA (chỉ đổi ở giao diện, không sửa dữ liệu trong DB)
+function toUpperSubjects(list) {
+    return (list || []).map((s) => ({ ...s, name: String(s.name || '').toLocaleUpperCase('vi-VN') }));
+}
+
 // New: Load subjects from Supabase
 async function loadSubjects() {
     if (configError) {
-        availableSubjects = FALLBACK_SUBJECTS;
+        availableSubjects = toUpperSubjects(FALLBACK_SUBJECTS);
         renderSubjectCards();
         updateHomeCardsVisibility();
         return;
@@ -1345,6 +1350,7 @@ async function loadSubjects() {
         console.error('Unexpected error fetching subjects:', e);
         availableSubjects = FALLBACK_SUBJECTS;
     }
+    availableSubjects = toUpperSubjects(availableSubjects);
     renderSubjectCards();
     updateHomeCardsVisibility();
 }
