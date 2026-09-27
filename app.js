@@ -1,5 +1,12 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { SUPABASE_URL as DEFAULT_SUPABASE_URL, SUPABASE_ANON_KEY as DEFAULT_SUPABASE_ANON_KEY } from './config.js';
+import {
+  captchaEnabled,
+  createCaptcha,
+  isCaptchaError,
+  CAPTCHA_REQUIRED_MESSAGE,
+  CAPTCHA_FAILED_MESSAGE,
+} from './captcha.js?v=20260927-1';
 
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
 
@@ -128,6 +135,40 @@ const elements = {
 
 
 let authMode = 'login';
+
+// Ô xác minh chống bot (Turnstile/hCaptcha) - xem captcha.js
+const captchas = {};
+function getCaptcha(slotId) {
+  if (!captchas[slotId]) {
+    const slot = document.getElementById(slotId);
+    if (!slot) return null;
+    captchas[slotId] = createCaptcha(slot);
+  }
+  return captchas[slotId];
+}
+
+function showCaptcha(slotId) {
+  if (!captchaEnabled) return;
+  getCaptcha(slotId)?.ensure();
+}
+
+// Trả về token captcha, '' nếu captcha đang tắt, hoặc null nếu người dùng chưa tích.
+function readCaptchaToken(slotId, report) {
+  if (!captchaEnabled) return '';
+  const captcha = getCaptcha(slotId);
+  const token = captcha?.getToken() || '';
+  if (!token) {
+    report(CAPTCHA_REQUIRED_MESSAGE, 'error');
+    captcha?.ensure();
+    return null;
+  }
+  return token;
+}
+
+function resetCaptcha(slotId) {
+  if (!captchaEnabled) return;
+  captchas[slotId]?.reset();
+}
 let currentMode = null;
 let currentView = 'auth';
 let currentUserId = null; // Dùng để tách bài đang làm theo từng tài khoản
@@ -274,6 +315,7 @@ function ensureForgotPasswordUI() {
   form.innerHTML = `
     <label for="forgotEmailInput">Email</label>
     <input id="forgotEmailInput" type="email" placeholder="you@example.com" />
+    <div id="forgotCaptcha" class="captcha-slot" hidden></div>
     <div class="inline-actions">
       <button id="sendResetBtn" class="primary-btn" type="button">Gửi email đặt lại</button>
       <button id="cancelResetBtn" class="ghost-btn" type="button">Hủy</button>
@@ -349,6 +391,8 @@ function ensureAccountPasswordUI() {
       <label for="confirmPasswordAccount">Nhập lại mật khẩu mới</label>
       <input id="confirmPasswordAccount" type="password" placeholder="••••••••" />
 
+      <div id="changePasswordCaptcha" class="captcha-slot" hidden></div>
+
       <button id="changePasswordBtn" class="primary-btn" type="button">Lưu thay đổi</button>
     </div>
   `;
@@ -359,6 +403,7 @@ function ensureAccountPasswordUI() {
   toggleBtn.addEventListener('click', () => {
     toggleContainer.hidden = true;
     passCard.hidden = false;
+    showCaptcha('changePasswordCaptcha');
   });
 
   const cancelBtn = passCard.querySelector('#cancelChangePasswordBtn');
@@ -387,6 +432,7 @@ function toggleForgotPassword() {
     elements.forgotEmailInput.value = elements.emailInput?.value?.trim() || '';
     elements.forgotEmailInput.focus();
   }
+  if (willShow) showCaptcha('forgotCaptcha');
 }
 
 function cancelForgotPassword() {
@@ -406,6 +452,10 @@ async function sendResetEmail() {
     return;
   }
 
+  const captchaToken = readCaptchaToken('forgotCaptcha', setStatus);
+  if (captchaToken === null) return;
+
+  if (elements.sendResetBtn) elements.sendResetBtn.disabled = true;
   try {
         const recoveryUrl = new URL(
       './reset-password.html',
@@ -414,6 +464,7 @@ async function sendResetEmail() {
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: recoveryUrl,
+      ...(captchaToken ? { captchaToken } : {}),
     });
     if (error) throw error;
 
@@ -421,7 +472,15 @@ async function sendResetEmail() {
     cancelForgotPassword();
   } catch (error) {
     console.error(error);
-    setStatus(error.message || 'Không thể gửi email đặt lại mật khẩu.', 'error');
+    setStatus(
+      isCaptchaError(error)
+        ? CAPTCHA_FAILED_MESSAGE
+        : (error.message || 'Không thể gửi email đặt lại mật khẩu.'),
+      'error'
+    );
+  } finally {
+    resetCaptcha('forgotCaptcha');
+    if (elements.sendResetBtn) elements.sendResetBtn.disabled = false;
   }
 }
 
@@ -597,6 +656,10 @@ async function changePasswordFromAccount() {
     return;
   }
 
+  // Bước kiểm tra mật khẩu cũ dùng signInWithPassword, nên cũng phải qua captcha
+  const captchaToken = readCaptchaToken('changePasswordCaptcha', setAccountStatus);
+  if (captchaToken === null) return;
+
   setAccountStatus('Đang xác thực...', 'info');
 
   try {
@@ -605,8 +668,15 @@ async function changePasswordFromAccount() {
     const email = userData?.user?.email;
     if (!email) throw new Error('Không tìm thấy thông tin phiên đăng nhập.');
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: old });
-    if (signInError) throw new Error('Mật khẩu cũ không chính xác.');
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: old,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
+    });
+    resetCaptcha('changePasswordCaptcha');
+    if (signInError) {
+      throw new Error(isCaptchaError(signInError) ? CAPTCHA_FAILED_MESSAGE : 'Mật khẩu cũ không chính xác.');
+    }
 
     // Nếu thành công, tiến hành lưu mật khẩu mới
     const { error } = await supabase.auth.updateUser({ password: p1 });
@@ -621,6 +691,7 @@ async function changePasswordFromAccount() {
     if (c) c.value = '';
   } catch (error) {
     console.error(error);
+    resetCaptcha('changePasswordCaptcha');
     setAccountStatus(error.message || 'Không thể đổi mật khẩu.', 'error');
   }
 }
@@ -645,6 +716,7 @@ function showSection(sectionName) {
   elements.authSection.hidden = resolved !== 'auth';
   elements.dashboardSection.hidden = resolved !== 'dashboard';
   elements.quizSection.hidden = resolved !== 'quiz';
+  if (resolved === 'auth') showCaptcha('authCaptcha');
 
   if (elements.sidebar) {
     elements.sidebar.hidden = false; // Luôn hiện thanh menu
@@ -1597,6 +1669,10 @@ async function handleAuthSubmit(event) {
     return;
   }
 
+  const captchaToken = readCaptchaToken('authCaptcha', setStatus);
+  if (captchaToken === null) return;
+  let captchaUsed = false;
+
   elements.authSubmitBtn.disabled = true;
   setStatus('Đang xử lý...', 'info');
 
@@ -1619,6 +1695,7 @@ async function handleAuthSubmit(event) {
         return;
       }
 
+      captchaUsed = true;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -1626,6 +1703,7 @@ async function handleAuthSubmit(event) {
           data: {
             full_name: fullName,
           },
+          ...(captchaToken ? { captchaToken } : {}),
         },
       });
       if (error) throw error;
@@ -1641,7 +1719,12 @@ async function handleAuthSubmit(event) {
       }
 
     } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      captchaUsed = true;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        ...(captchaToken ? { options: { captchaToken } } : {}),
+      });
       if (error) throw error;
             updateUserUI(data.session);
       await ensureProfileForSession(data.session);
@@ -1654,7 +1737,9 @@ async function handleAuthSubmit(event) {
   } catch (error) {
     console.error(error);
     let errorMsg = error.message || 'Đăng nhập hoặc đăng ký thất bại.';
-    if (error.message === 'Invalid login credentials' || error.status === 400) {
+    if (isCaptchaError(error)) {
+      errorMsg = CAPTCHA_FAILED_MESSAGE;
+    } else if (error.message === 'Invalid login credentials' || error.status === 400) {
       errorMsg = 'Email hoặc mật khẩu không chính xác.';
     }
     if (error.message === 'Email not confirmed') {
@@ -1662,6 +1747,8 @@ async function handleAuthSubmit(event) {
     }
     setStatus(errorMsg, 'error');
   } finally {
+    // Token captcha chỉ dùng 1 lần -> lấy token mới cho lần bấm tiếp theo
+    if (captchaUsed) resetCaptcha('authCaptcha');
     elements.authSubmitBtn.disabled = false;
   }
 }
@@ -3957,6 +4044,7 @@ function openPasswordRecovery(session) {
 
 
   setAuthMode('login');
+  showCaptcha('authCaptcha');
 updateHomeCaret();
 
 if (!configError) {

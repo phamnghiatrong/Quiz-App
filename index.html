@@ -100,6 +100,23 @@
       .password-toggle-btn[aria-pressed="true"] .icon-eye-off {
         display: block !important;
       }
+    
+      /* Ô xác minh chống bot (captcha.js). Chiếm trọn 1 hàng của lưới .auth-form;
+         nút gửi ngay sau nó cũng chiếm trọn hàng để không bị đẩy vào cột nhãn 132px.
+         Dùng !important vì style-final-fix.css có luật lưới/nút dùng !important. */
+      .auth-form > .captcha-slot:not([hidden]) {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+        min-height: 65px !important;
+        overflow: hidden !important;
+      }
+      .auth-form > .captcha-slot:not([hidden]) + #authSubmitBtn,
+      .auth-form > .captcha-slot:not([hidden]) + .inline-actions,
+      .auth-form > .captcha-slot:not([hidden]) + #changePasswordBtn {
+        grid-column: 1 / -1 !important;
+      }
     </style>
   </head>
     <body>
@@ -266,6 +283,8 @@
                 </svg>
               </button>
             </div>
+
+            <div id="authCaptcha" class="captcha-slot" hidden></div>
 
             <button id="authSubmitBtn" class="primary-btn" type="submit">Đăng nhập</button>
           </form>
@@ -508,7 +527,7 @@
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20260925-1"></script>
+    <script type="module" src="./app.js?v=20260927-1"></script>
 
   </body>
 </html>

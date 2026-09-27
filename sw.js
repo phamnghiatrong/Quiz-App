@@ -5,7 +5,7 @@
    - Ưu tiên lấy dữ liệu mới khi online (network-first cho navigation).
 */
 
-const CACHE_NAME = 'quiz-app-v2';
+const CACHE_NAME = 'quiz-app-v3';
 
 // Chỉ liệt kê file CÓ THẬT. Đường dẫn tương đối để chạy đúng cả khi mở
 // bằng Live Server lẫn khi deploy lên Vercel.
