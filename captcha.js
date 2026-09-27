@@ -25,7 +25,7 @@
    File này được import kèm ?v=... nên luôn lấy bản mới cùng app.js. */
 
 export const CAPTCHA_PROVIDER = 'turnstile'; // 'turnstile' hoặc 'hcaptcha'
-export const CAPTCHA_SITE_KEY = ''; // Dán Site Key vào đây
+export const CAPTCHA_SITE_KEY = '0x4AAAAAAFE8djYT32o_v0KN'; // Dán Site Key vào đây
 
 const PROVIDERS = {
   turnstile: {
