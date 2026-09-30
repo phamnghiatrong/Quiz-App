@@ -106,9 +106,9 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
 <section class="page" data-page="ban-do" aria-labelledby="h-ban-do">
   <div class="sec-head">
     <h2 id="h-ban-do">Bản đồ 12 thì</h2>
-    <p class="lead">Mọi thì đều được lắp từ hai mảnh: <b>thời</b> (quá khứ, hiện tại, tương lai) quyết định trợ động từ đứng đầu, <b>thể</b> (đơn, tiếp diễn, hoàn thành, hoàn thành tiếp diễn) quyết định phần đuôi. Hàng là thời, cột là thể. Bấm vào một ô để mở trang chi tiết của thì đó.</p>
+    <p class="lead">Mọi thì đều được lắp từ hai mảnh: <b>thời</b> (quá khứ, hiện tại, tương lai) quyết định trợ động từ đứng đầu, <b>thể</b> (đơn, tiếp diễn, hoàn thành, hoàn thành tiếp diễn) quyết định phần đuôi. Bấm vào một ô để mở trang chi tiết của thì đó.</p>
   </div>
-  <div class="legend"><span class="t-past">Quá khứ</span><span class="t-present">Hiện tại</span><span class="t-future">Tương lai</span></div>
+  <div class="legend"><span class="t-present">Hiện tại</span><span class="t-past">Quá khứ</span><span class="t-future">Tương lai</span></div>
   <div class="scroll-x"><div class="matrix" id="matrix"></div></div>
   <div class="build">
     <div class="panel">
@@ -353,12 +353,12 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   }
 
   /* ====================== 1. BẢN ĐỒ ====================== */
-  let mh = '<div></div>' + ASPECTS.map((a) => `<div class="mh"><b>${a.vi}</b><span>${a.tail}</span></div>`).join('');
+  let mh = '<div class="mcorner"></div>' + ASPECTS.map((a) => `<div class="mh"><b>${a.vi}</b><span>${a.tail}</span></div>`).join('');
   for (const tm of TIMES) {
     mh += `<div class="mrow t-${tm.id}">${tm.vi}</div>`;
     for (let a = 0; a < 4; a++) {
       const t = TENSES.find((x) => x.time === tm.id && x.a === a);
-      mh += `<button type="button" class="cell t-${tm.id}" data-open="${t.id}"><span class="vi">${t.vi}</span><span class="en">${t.en}</span><span class="sk">${t.sk}</span></button>`;
+      mh += `<button type="button" class="cell t-${tm.id}" data-open="${t.id}"><span class="vi">${t.vi}</span><span class="en">${t.en}</span><span class="sk">${t.sk.split(' + ').map((x) => `<span class="nw">${x}</span>`).join(' + ')}</span></button>`;
     }
   }
   $('matrix').innerHTML = mh;
@@ -409,7 +409,9 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   function renderVerbs(q = '') {
     const n = q.trim().toLowerCase();
     const rows = VERBS.filter((v) => !n || v.some((c) => c.toLowerCase().includes(n)));
-    vbody.innerHTML = rows.map((v) => `<tr><td>${v[0]}</td><td>${v[1]}</td><td>${v[2]}</td><td>${v[3]}</td></tr>`).join('') ||
+    // <wbr> sau "/" để dạng kép (learned/learnt) xuống dòng được trên điện thoại.
+    const br = (x) => String(x).replace(/\//g, '/<wbr>');
+    vbody.innerHTML = rows.map((v) => `<tr><td>${v[0]}</td><td>${br(v[1])}</td><td>${br(v[2])}</td><td>${v[3]}</td></tr>`).join('') ||
       '<tr><td colspan="4" style="font-family:inherit;color:var(--muted)">Không tìm thấy động từ này trong bảng.</td></tr>';
     vcount.textContent = `${rows.length} / ${VERBS.length} động từ`;
   }

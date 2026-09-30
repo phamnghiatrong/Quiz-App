@@ -156,6 +156,7 @@ input.blank.is-wrong, input.txt.is-wrong { border-color: var(--bad); background:
 .cell:focus-visible { outline: 2px solid var(--tone); }
 .cell .vi { font-weight: 600; font-size: 15px; color: var(--ink); }
 .cell .en { font-size: 13px; color: var(--tone); font-weight: 500; }
+.cell .sk .nw { white-space: nowrap; }
 .cell .sk { font-family: var(--mono); font-size: 12.5px; color: var(--ink); opacity: .85; margin-top: 4px; }
 
 .build { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
@@ -389,13 +390,37 @@ figure.tl figcaption { font-size: 13.5px; color: var(--muted); }
 .pfb { padding: 0 22px 18px; display: grid; gap: 8px; }
 .foot-tip { font-size: 14px; color: var(--muted); }
 
-/* ---------- responsive ---------- */
-@media (max-width: 900px) {
+/* ---------- responsive ----------
+   Dùng container query theo độ rộng thật của khung nội dung (.tn), không
+   theo màn hình: có sidebar thì khung có thể hẹp dù màn hình rộng. */
+.tn { container: tn / inline-size; }
+
+@container tn (max-width: 760px) {
   .build, .d-top, .cmps, .refgrid, .builder { grid-template-columns: 1fr; }
   .mastery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .opts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Bản đồ 12 thì: bỏ bảng 5 cột (phải cuộn ngang), xếp theo nhóm thời:
+     tiêu đề "Hiện tại / Quá khứ / Tương lai" rồi lưới 2x2 bốn thể. */
+  .scroll-x { overflow: visible; padding-bottom: 0; }
+  .matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; gap: 8px; }
+  .matrix .mcorner, .matrix .mh { display: none; }
+  .matrix .mrow {
+    grid-column: 1 / -1; margin-top: 10px; padding: 0 0 2px; gap: 8px; font-size: 17px;
+  }
+  .matrix .mrow::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--tone); flex: none; }
+  .matrix .mh + .mrow { margin-top: 0; }
+  .cell { padding: 11px 12px; gap: 3px; }
+  .cell .vi { font-size: 14.5px; line-height: 1.3; }
+  .cell .en { font-size: 12.5px; line-height: 1.3; }
+  .cell .sk { font-size: 12px; margin-top: 2px; }
+
+  /* Bảng: bỏ độ rộng tối thiểu để không phải cuộn ngang */
+  .vtable, .vtable.all12 { min-width: 0; }
+  .vtable th, .vtable td { padding: 8px 9px; }
+  .vtable.all12 td:first-child { width: 34%; }
 }
-@media (max-width: 560px) {
+@container tn (max-width: 520px) {
   .panel { padding: 16px; }
   .sides, .mrow2, .dopts { grid-template-columns: 1fr; }
   .d-body, .d-head { padding: 18px; }
@@ -406,6 +431,19 @@ figure.tl figcaption { font-size: 13.5px; color: var(--muted); }
   .pfb { padding-inline: 16px; }
   .pick-row .lbl { width: 100%; }
   .qcard { padding: 16px; }
+  .opts { grid-template-columns: 1fr; }
+  .vtable { font-size: 14px; }
+  .vtable th, .vtable td { padding: 7px 6px; }
+  .vtable td:nth-child(-n+3) { font-size: 12px; }
+  .vtable th { font-size: 11px; letter-spacing: .02em; }
+  .vtable.all12 td { font-size: 14px; }
+  input[type="search"] { width: 100%; }
+  .eq { font-size: 13px; }
+}
+@container tn (max-width: 340px) {
+  .vtable th, .vtable td { padding: 6px 4px; }
+  .vtable td:nth-child(-n+3) { font-size: 11px; }
+  .vtable td:nth-child(4) { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
