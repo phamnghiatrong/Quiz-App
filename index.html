@@ -117,6 +117,60 @@
       .auth-form > .captcha-slot:not([hidden]) + #changePasswordBtn {
         grid-column: 1 / -1 !important;
       }
+
+      /* Mục "12 thì tiếng Anh" (tenses/). Phần nội dung nằm trong Shadow DOM
+         nên có CSS riêng (tenses/tenses.css); ở đây chỉ định dạng khung ngoài
+         và thanh chuyển trang con. Các nút trang con dùng style nút chung của
+         app; nút đang chọn có data-active="true" -> nền tím như .primary-btn. */
+      .tenses-view:not([hidden]) {
+        display: grid !important;
+        gap: 18px !important;
+        min-width: 0 !important;
+      }
+      .tenses-head {
+        display: grid !important;
+        gap: 14px !important;
+        min-width: 0 !important;
+      }
+      .tenses-head .eyebrow {
+        margin: 0 !important;
+      }
+      .tenses-subnav {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+        min-width: 0 !important;
+        padding: 2px 0 !important;
+      }
+      .tenses-subnav .tn-nav-btn {
+        min-height: 42px !important;
+        padding: 9px 16px !important;
+        white-space: nowrap !important;
+      }
+      /* Dùng #tensesNav để thắng luật button:not(...) của style-final-fix.css */
+      #tensesNav .tn-nav-btn[data-active="true"] {
+        background: linear-gradient(135deg, #8b5cf6, #6366f1) !important;
+        border-color: rgba(139, 92, 246, 0.45) !important;
+        color: #ffffff !important;
+      }
+      .tenses-body {
+        min-width: 0 !important;
+      }
+      @media (max-width: 768px) {
+        .tenses-subnav {
+          flex-wrap: nowrap !important;
+          overflow-x: auto !important;
+          scrollbar-width: none !important;
+          -webkit-overflow-scrolling: touch;
+          padding: 2px 2px 6px !important;
+        }
+        .tenses-subnav::-webkit-scrollbar {
+          display: none;
+        }
+        .tenses-subnav .tn-nav-btn {
+          flex: 0 0 auto !important;
+        }
+      }
     </style>
   </head>
     <body>
@@ -162,6 +216,15 @@
                 </svg>
               </span>
               <span class="sidebar-label">Lớp học</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="tenses" title="12 thì tiếng Anh">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="8.5" />
+                  <path d="M12 7.5V12l3 2" />
+                </svg>
+              </span>
+              <span class="sidebar-label">12 thì tiếng Anh</span>
             </button>
             <button class="sidebar-item" type="button" data-nav="author" title="Tác giả">
               <span class="sidebar-icon">✎</span>
@@ -433,7 +496,7 @@
                                     <p class="muted-text">
                     Ứng dụng hướng đến sự đơn giản, dễ sử dụng và hiệu quả thực tế, giúp việc ôn tập trở nên nhẹ nhàng hơn nhưng vẫn đảm bảo tính nghiêm túc trong học tập.
                   </p>
-                  <p class="muted-text"><strong>Phiên bản 4.0</strong> cập nhật ngày 17/09/2026</p>
+                  <p class="muted-text"><strong>Phiên bản 4.1</strong> cập nhật ngày 30/09/2026</p>
                 </section>
 
                 <section class="panel about-card">
@@ -441,6 +504,17 @@
                   <h3>Thông tin cập nhật</h3>
 
                   <div class="changelog-list">
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.1</strong>&nbsp;- Cập nhật ngày: 30/09/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm mục "12 thì tiếng Anh" trên menu, chia thành 7 trang: bản đồ 12 thì, chi tiết từng thì, máy lắp câu, cặp thì dễ nhầm, chính tả và động từ bất quy tắc, phòng luyện, bộ đề 49 câu.</li>
+                          <li>Sửa lỗi icon "Lớp học" không hiện trên menu điện thoại.</li>
+                        </ul>
+                      </div>
+                    </details>
+
                     <details class="changelog-item" open>
                       <summary><strong>Phiên bản 4.0</strong>&nbsp;- Cập nhật ngày: 17/09/2026</summary>
                       <div class="changelog-content">
@@ -503,6 +577,17 @@
                   </div>
                 </section>
               </div>
+
+        <!-- Mục "12 thì tiếng Anh": nội dung do tenses/tenses.js dựng (nạp khi mở lần đầu) -->
+        <div id="tensesView" class="tenses-view" hidden>
+          <section class="panel tenses-head">
+            <p class="eyebrow">12 thì tiếng Anh</p>
+            <nav id="tensesNav" class="tenses-subnav" aria-label="Các phần của 12 thì tiếng Anh"></nav>
+          </section>
+          <section class="panel tenses-body">
+            <div id="tensesHost"><p class="muted-text">Đang tải nội dung...</p></div>
+          </section>
+        </div>
       </main>
 
       <footer id="feedbackSection" class="app-footer" hidden>
@@ -520,14 +605,14 @@
               </footer>
 
       <footer id="versionFooter" class="app-footer" hidden aria-label="Phiên bản ứng dụng">
-        <p class="muted-text"><strong>Phiên bản 4.0</strong> cập nhật ngày 17/09/2026</p>
+        <p class="muted-text"><strong>Phiên bản 4.1</strong> cập nhật ngày 30/09/2026</p>
       </footer>
 
         </div>
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20260927-1"></script>
+    <script type="module" src="./app.js?v=20260930-1"></script>
 
   </body>
 </html>

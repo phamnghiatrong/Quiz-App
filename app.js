@@ -98,6 +98,10 @@ const elements = {
   classCard: document.getElementById('classCard'),
   classContent: document.getElementById('classContent'),
 
+  tensesView: document.getElementById('tensesView'),
+  tensesNav: document.getElementById('tensesNav'),
+  tensesHost: document.getElementById('tensesHost'),
+
   quizTitle: document.getElementById('quizTitle'),
   timerBadge: document.getElementById('timerBadge'),
   pauseBtn: document.getElementById('pauseBtn'),
@@ -765,7 +769,7 @@ function setDashboardContainerMode(mode) {
 
 function setView(viewKey) {
   const isAuthed = !elements.userBadge.hidden;
-  const requiresAuth = ['home', 'account', 'history', 'leaderboard', 'classes'].includes(viewKey);
+  const requiresAuth = ['home', 'account', 'history', 'leaderboard', 'classes', 'tenses'].includes(viewKey);
 
   let targetView = viewKey;
   if (requiresAuth && !isAuthed) {
@@ -789,6 +793,7 @@ function setView(viewKey) {
   if (elements.historyCard) elements.historyCard.hidden = true;
   if (elements.leaderboardCard) elements.leaderboardCard.hidden = true;
   if (elements.classCard) elements.classCard.hidden = true;
+  if (elements.tensesView) elements.tensesView.hidden = true;
   if (elements.aboutCard) elements.aboutCard.hidden = true;
   if (elements.appInfoCard) elements.appInfoCard.hidden = true;
   if (elements.feedbackSection) elements.feedbackSection.hidden = true;
@@ -840,6 +845,12 @@ function setView(viewKey) {
         loadMyClasses();
       }
       break;
+    case 'tenses':
+      setDashboardContainerMode('default');
+      showSection('none');
+      if (elements.tensesView) elements.tensesView.hidden = false;
+      openTenses();
+      break;
     case 'author':
       setDashboardContainerMode('default');
       showSection('none');
@@ -864,6 +875,33 @@ function setView(viewKey) {
 }
 
 
+
+// Mục "12 thì tiếng Anh": module tenses/ chỉ được tải khi người dùng mở mục
+// này lần đầu (không làm chậm lúc vào app). Tiến độ học lưu theo từng tài
+// khoản nên truyền currentUserId; đổi tài khoản thì module tự dựng lại.
+// Nhớ tăng ?v= bên dưới mỗi khi sửa file trong thư mục tenses/.
+const TENSES_MODULE_URL = './tenses/tenses.js?v=20260930-1';
+let tensesModulePromise = null;
+
+async function openTenses() {
+  const { tensesHost, tensesNav, tensesView } = elements;
+  if (!tensesHost || !tensesNav) return;
+  try {
+    if (!tensesModulePromise) tensesModulePromise = import(TENSES_MODULE_URL);
+    const mod = await tensesModulePromise;
+    await mod.mountTenses(tensesHost, tensesNav, {
+      userId: currentUserId,
+      scrollAnchor: tensesView,
+    });
+  } catch (error) {
+    console.error('[tenses] Không tải được mục 12 thì:', error);
+    tensesModulePromise = null; // cho phép thử lại ở lần bấm sau
+    if (!tensesHost.shadowRoot) {
+      tensesHost.innerHTML =
+        '<p class="status-text error">Không tải được mục 12 thì tiếng Anh. Kiểm tra kết nối mạng rồi bấm lại vào mục này trên menu.</p>';
+    }
+  }
+}
 
 function setSidebarCollapsed(collapsed) {
   if (!elements.sidebar) return;
@@ -926,6 +964,8 @@ function navigateFromSidebar(navKey) {
     scrollToTarget(isAuthed ? elements.leaderboardCard : elements.authSection);
   } else if (navKey === 'classes') {
     scrollToTarget(isAuthed ? elements.classCard : elements.authSection);
+  } else if (navKey === 'tenses') {
+    scrollToTarget(isAuthed ? elements.tensesView : elements.authSection);
   } else if (navKey === 'author') {
     scrollToTarget(elements.aboutCard);
   } else if (navKey === 'feedback') {
@@ -1168,7 +1208,9 @@ function ensureMobileMenuUI() {
     btn.dataset.nav = src.dataset.nav || '';
     btn.title = src.title || '';
 
-    const icon = src.querySelector('.sidebar-icon')?.textContent || '';
+    // Dùng innerHTML (không phải textContent) để giữ được icon dạng SVG
+    // như "Lớp học", "12 thì tiếng Anh". Nội dung lấy từ markup tĩnh của sidebar.
+    const icon = src.querySelector('.sidebar-icon')?.innerHTML || '';
     const label = src.querySelector('.sidebar-label')?.textContent || '';
     btn.innerHTML = `<span class="sidebar-icon">${icon}</span><span class="sidebar-label">${label}</span>`;
 
