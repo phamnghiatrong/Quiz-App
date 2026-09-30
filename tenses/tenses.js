@@ -273,13 +273,37 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
 
 </div>`;
 
-  /* ====================== ĐIỀU HƯỚNG TRANG CON ====================== */
+  /* ====================== ĐIỀU HƯỚNG TRANG CON ======================
+   * Khung rộng: hàng nút. Khung hẹp (điện thoại, cửa sổ nhỏ): chỉ hiện 1 nút
+   * ghi tên trang đang xem, bấm vào sổ danh sách 7 trang (CSS trong index.html
+   * dùng container query trên .tenses-head để đổi giữa 2 kiểu). */
   const pageIds = PAGES.map((p) => p.id);
-  nav.innerHTML = PAGES.map((p) => `<button type="button" class="tn-nav-btn" data-tn-page="${p.id}">${escA(p.label)}</button>`).join('');
+  const pageLabel = Object.fromEntries(PAGES.map((p) => [p.id, p.label]));
+  nav.innerHTML =
+    '<button type="button" class="tn-nav-toggle" aria-expanded="false" aria-controls="tensesNavList">' +
+      '<span class="tn-nav-toggle-text"><span class="tn-nav-hint">Đang xem</span><span class="tn-nav-current"></span></span>' +
+      '<span class="tn-nav-caret" aria-hidden="true">▼</span>' +
+    '</button>' +
+    '<div class="tn-nav-list" id="tensesNavList">' +
+      PAGES.map((p) => `<button type="button" class="tn-nav-btn" data-tn-page="${p.id}">${escA(p.label)}</button>`).join('') +
+    '</div>';
+  const navToggle = nav.querySelector('.tn-nav-toggle');
+  function setNavOpen(open) {
+    nav.classList.toggle('is-open', open);
+    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    navToggle.querySelector('.tn-nav-caret').textContent = open ? '▲' : '▼';
+  }
   nav.onclick = (e) => {
+    if (e.target.closest('.tn-nav-toggle')) { setNavOpen(!nav.classList.contains('is-open')); return; }
     const b = e.target.closest('[data-tn-page]');
-    if (b) showPage(b.dataset.tnPage, { scroll: true });
+    if (b) { setNavOpen(false); showPage(b.dataset.tnPage, { scroll: true }); }
   };
+  // Bấm ra ngoài hoặc nhấn Esc thì đóng menu sổ xuống (chỉ gắn 1 lần).
+  if (!nav.dataset.tnBound) {
+    nav.dataset.tnBound = '1';
+    document.addEventListener('click', (e) => { if (nav.classList.contains('is-open') && !nav.contains(e.target)) setNavOpen(false); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.classList.contains('is-open')) { setNavOpen(false); navToggle.focus(); } });
+  }
 
   function scrollToTop() {
     const anchor = scrollAnchor || nav;
@@ -296,11 +320,7 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
       if (on) { b.dataset.active = 'true'; b.setAttribute('aria-current', 'page'); }
       else { delete b.dataset.active; b.removeAttribute('aria-current'); }
     });
-    // Trên điện thoại thanh trang con cuộn ngang: kéo nút đang chọn vào tầm nhìn.
-    const act = nav.querySelector('[data-active="true"]');
-    if (act && nav.scrollWidth > nav.clientWidth) {
-      nav.scrollTo({ left: act.offsetLeft - (nav.clientWidth - act.offsetWidth) / 2, behavior: smooth() });
-    }
+    nav.querySelector('.tn-nav-current').textContent = `${pageIds.indexOf(id) + 1}/${pageIds.length} · ${pageLabel[id]}`;
     store.page = id;
     save();
     if (scroll) scrollToTop();

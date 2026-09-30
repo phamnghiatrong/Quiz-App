@@ -135,11 +135,24 @@
       .tenses-head .eyebrow {
         margin: 0 !important;
       }
+      /* Thanh chuyển trang con. Khung rộng: hàng nút. Khi card tiêu đề hẹp
+         hơn 640px (điện thoại, cửa sổ nhỏ, tablet dọc) thì đổi thành menu sổ
+         xuống. Dùng container query theo độ rộng card (không theo màn hình)
+         vì sidebar chiếm chỗ nên card có thể hẹp dù màn hình > 768px. */
+      .tenses-head {
+        container-type: inline-size;
+      }
       .tenses-subnav {
+        position: relative !important;
+        min-width: 0 !important;
+      }
+      .tenses-subnav .tn-nav-toggle {
+        display: none !important;
+      }
+      .tenses-subnav .tn-nav-list {
         display: flex !important;
         flex-wrap: wrap !important;
         gap: 10px !important;
-        min-width: 0 !important;
         padding: 2px 0 !important;
       }
       .tenses-subnav .tn-nav-btn {
@@ -156,19 +169,63 @@
       .tenses-body {
         min-width: 0 !important;
       }
-      @media (max-width: 768px) {
-        .tenses-subnav {
-          flex-wrap: nowrap !important;
-          overflow-x: auto !important;
-          scrollbar-width: none !important;
-          -webkit-overflow-scrolling: touch;
-          padding: 2px 2px 6px !important;
+      @container (max-width: 640px) {
+        #tensesNav .tn-nav-toggle {
+          display: flex !important;
+          width: 100% !important;
+          min-height: 54px !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 12px !important;
+          padding: 10px 16px !important;
+          text-align: left !important;
+          border-color: rgba(139, 92, 246, 0.45) !important;
         }
-        .tenses-subnav::-webkit-scrollbar {
-          display: none;
+        #tensesNav .tn-nav-toggle:hover {
+          transform: none !important;
         }
-        .tenses-subnav .tn-nav-btn {
-          flex: 0 0 auto !important;
+        #tensesNav .tn-nav-toggle-text {
+          display: grid !important;
+          gap: 1px !important;
+          min-width: 0 !important;
+        }
+        #tensesNav .tn-nav-hint {
+          font-size: 12px !important;
+          font-weight: 600 !important;
+          color: #64748b !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.06em !important;
+        }
+        #tensesNav .tn-nav-current {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          color: #6d28d9 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+        #tensesNav .tn-nav-caret {
+          color: #8b5cf6 !important;
+          font-size: 13px !important;
+        }
+        #tensesNav .tn-nav-list {
+          display: none !important;
+        }
+        #tensesNav.is-open .tn-nav-list {
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          gap: 8px !important;
+          margin-top: 10px !important;
+          padding: 0 !important;
+        }
+        #tensesNav.is-open .tn-nav-btn {
+          width: 100% !important;
+          justify-content: flex-start !important;
+          text-align: left !important;
+          white-space: normal !important;
+        }
+        #tensesNav.is-open .tn-nav-btn:hover {
+          transform: none !important;
         }
       }
     </style>
@@ -612,7 +669,7 @@
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20260930-1"></script>
+    <script type="module" src="./app.js?v=20260930-2"></script>
 
   </body>
 </html>

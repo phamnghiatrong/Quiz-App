@@ -880,7 +880,7 @@ function setView(viewKey) {
 // này lần đầu (không làm chậm lúc vào app). Tiến độ học lưu theo từng tài
 // khoản nên truyền currentUserId; đổi tài khoản thì module tự dựng lại.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa file trong thư mục tenses/.
-const TENSES_MODULE_URL = './tenses/tenses.js?v=20260930-1';
+const TENSES_MODULE_URL = './tenses/tenses.js?v=20260930-2';
 let tensesModulePromise = null;
 
 async function openTenses() {
