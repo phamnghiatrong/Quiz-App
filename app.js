@@ -3443,12 +3443,22 @@ async function openTakeQuiz(quizId, quizTitle) {
     classState.attemptId = data[0].attempt_id;
     classState.takeQuizQuestions = data;
 
-    // Tính hạn nộp bài từ started_at THẬT trên server (không phải thời điểm
-    // client gọi hàm) - tránh việc thoát ra vào lại làm mới đồng hồ đếm ngược.
+    // Hạn nộp do SERVER tính (deadline_at = sớm hơn giữa started_at + số phút
+    // và giờ đóng bài end_at). Server cũng trả server_now để bù lệch đồng hồ
+    // của máy học sinh. Server tự từ chối đáp án nộp quá hạn + 2 phút ân hạn.
+    const { deadline_at: deadlineAt, server_now: serverNow } = data[0];
     const timeLimitMinutes = data[0].time_limit_minutes;
     const startedAt = data[0].started_at;
-    if (timeLimitMinutes && startedAt) {
-      classState.takeQuizDeadline = new Date(startedAt).getTime() + timeLimitMinutes * 60 * 1000;
+    let deadline = null;
+    if (deadlineAt) {
+      const clockOffset = serverNow ? new Date(serverNow).getTime() - Date.now() : 0;
+      deadline = new Date(deadlineAt).getTime() - clockOffset;
+    } else if (timeLimitMinutes && startedAt && deadlineAt === undefined) {
+      // Dự phòng khi server chưa có cột deadline_at (phiên bản RPC cũ).
+      deadline = new Date(startedAt).getTime() + timeLimitMinutes * 60 * 1000;
+    }
+    if (deadline) {
+      classState.takeQuizDeadline = deadline;
       if (classState.takeQuizDeadline <= Date.now()) {
         // Hết giờ ngay khi mở lại (đã quá hạn từ trước) -> nộp bài luôn.
         stopClassQuizTimer();
@@ -3582,7 +3592,11 @@ async function submitTakeQuiz(auto = false) {
     if (error) throw error;
     classState.reviewData = data || [];
     const correct = classState.reviewData.filter((r) => r.is_correct).length;
-    classState.reviewSummary = { correct, total: classState.reviewData.length };
+    classState.reviewSummary = {
+      correct,
+      total: classState.reviewData.length,
+      timedOut: Boolean(classState.reviewData[0] && classState.reviewData[0].timed_out),
+    };
     classState.screen = 'review';
     renderReviewScreen();
   } catch (err) {
@@ -3605,6 +3619,7 @@ function renderReviewScreen() {
     </div>
     <div class="about-card" style="margin-bottom:16px;">
       <p><strong>Điểm: ${s ? s.correct : 0}/${s ? s.total : 0} (${percent}%)</strong></p>
+      ${s && s.timedOut ? '<p class="muted-text">Bài được nộp sau hạn chót nên đáp án không được tính.</p>' : ''}
     </div>
     ${classState.reviewData.map((r) => `
       <div class="quiz-card" style="margin-bottom:12px;">

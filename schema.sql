@@ -428,8 +428,11 @@ create table if not exists public.class_quiz_attempts (
   percent        numeric,
   started_at     timestamptz not null default now(),
   submitted_at   timestamptz,
+  timed_out      boolean not null default false, -- nộp sau hạn chót + ân hạn -> đáp án không tính
   unique (class_quiz_id, user_id, attempt_number)
 );
+-- DB cũ đã có bảng: thêm cột nếu thiếu.
+alter table public.class_quiz_attempts add column if not exists timed_out boolean not null default false;
 
 -- Lưu snapshot câu hỏi + đáp án tại thời điểm nộp bài (không phụ thuộc vào
 -- việc ngân hàng câu hỏi bị sửa/xoá sau này -> kết quả cũ vẫn xem lại đúng).
@@ -1010,13 +1013,32 @@ begin
 end;
 $$;
 
--- Bắt đầu (hoặc tiếp tục) làm bài: tạo/tái sử dụng attempt đang dở, trả về câu
--- hỏi KHÔNG kèm đáp án đúng.
--- LƯU Ý: trả kèm started_at + time_limit_minutes của CHÍNH attempt (không lấy
--- từ cache phía client) để tính hạn nộp bài dựa trên thời điểm bắt đầu THẬT
--- trên server. Nếu chỉ tính deadline = "lúc client gọi hàm này" + số phút thì
--- học sinh thoát ra vào lại nhiều lần (tiếp tục 1 attempt đang dở) sẽ được
--- "làm mới" đồng hồ đếm ngược mỗi lần - đây là lỗ hổng cần tránh.
+-- Hạn nộp 1 lượt = sớm hơn giữa started_at + time_limit_minutes và end_at.
+-- submit_class_quiz_attempt cho 120 giây ân hạn; nộp muộn hơn -> bỏ đáp án,
+-- timed_out = true (chặn gọi thẳng RPC để nộp sau khi hết giờ).
+create or replace function public.class_attempt_deadline(
+  p_started_at timestamptz, p_time_limit_minutes integer, p_end_at timestamptz
+)
+returns timestamptz
+language sql
+immutable
+set search_path = public
+as $$
+  -- least() bỏ qua null; trả null khi không có giới hạn nào.
+  select least(
+    case when p_time_limit_minutes is not null and p_time_limit_minutes > 0
+         then p_started_at + make_interval(mins => p_time_limit_minutes) end,
+    p_end_at
+  );
+$$;
+revoke execute on function public.class_attempt_deadline(timestamptz, integer, timestamptz) from public, anon;
+grant  execute on function public.class_attempt_deadline(timestamptz, integer, timestamptz) to authenticated;
+
+-- Bắt đầu (hoặc tiếp tục) làm bài.
+-- Thay đổi: trả thêm deadline_at (hạn do server tính, đã gồm end_at) và
+-- server_now (để client bù lệch đồng hồ). 2 cột mới nằm CUỐI nên client cũ
+-- vẫn chạy được. Lượt đang dở được trả về kể cả khi bài đã đóng, để client
+-- tự nộp và đóng lượt đó (trước đây lượt dở bị kẹt vĩnh viễn ở in_progress).
 drop function if exists public.start_class_quiz_attempt(uuid);
 create function public.start_class_quiz_attempt(p_class_quiz_id uuid)
 returns table (
@@ -1029,7 +1051,9 @@ returns table (
   option_a           text,
   option_b           text,
   option_c           text,
-  option_d           text
+  option_d           text,
+  deadline_at        timestamptz,
+  server_now         timestamptz
 )
 language plpgsql
 security definer
@@ -1050,34 +1074,46 @@ begin
   ) then
     raise exception 'Bạn không phải thành viên của lớp này.';
   end if;
-  if v_quiz.start_at is not null and now() < v_quiz.start_at then
-    raise exception 'Bài kiểm tra chưa mở.';
-  end if;
-  if v_quiz.end_at is not null and now() > v_quiz.end_at then
-    raise exception 'Bài kiểm tra đã đóng.';
-  end if;
 
   select * into v_attempt from public.class_quiz_attempts
   where class_quiz_id = p_class_quiz_id and user_id = auth.uid() and status = 'in_progress'
   order by attempt_number desc limit 1;
 
   if v_attempt.id is null then
-    select count(*) into v_attempt_count from public.class_quiz_attempts
-    where class_quiz_id = p_class_quiz_id and user_id = auth.uid();
-
-    if v_attempt_count >= v_quiz.max_attempts then
-      raise exception 'Bạn đã hết lượt làm bài kiểm tra này.';
+    if v_quiz.start_at is not null and now() < v_quiz.start_at then
+      raise exception 'Bài kiểm tra chưa mở.';
+    end if;
+    if v_quiz.end_at is not null and now() > v_quiz.end_at then
+      raise exception 'Bài kiểm tra đã đóng.';
     end if;
 
-    insert into public.class_quiz_attempts (class_quiz_id, user_id, attempt_number, status)
-    values (p_class_quiz_id, auth.uid(), v_attempt_count + 1, 'in_progress')
-    returning * into v_attempt;
+    -- Khoá theo (quiz, user) để 2 tab bấm "Làm bài" cùng lúc không tạo 2 lượt.
+    perform pg_advisory_xact_lock(hashtextextended(p_class_quiz_id::text || ':' || auth.uid()::text, 0));
+
+    select * into v_attempt from public.class_quiz_attempts
+    where class_quiz_id = p_class_quiz_id and user_id = auth.uid() and status = 'in_progress'
+    order by attempt_number desc limit 1;
+
+    if v_attempt.id is null then
+      select count(*) into v_attempt_count from public.class_quiz_attempts
+      where class_quiz_id = p_class_quiz_id and user_id = auth.uid();
+
+      if v_attempt_count >= v_quiz.max_attempts then
+        raise exception 'Bạn đã hết lượt làm bài kiểm tra này.';
+      end if;
+
+      insert into public.class_quiz_attempts (class_quiz_id, user_id, attempt_number, status)
+      values (p_class_quiz_id, auth.uid(), v_attempt_count + 1, 'in_progress')
+      returning * into v_attempt;
+    end if;
   end if;
 
   return query
     select v_attempt.id, v_attempt.started_at, v_quiz.time_limit_minutes,
            cqq.question_id, cqq.question_order,
-           q.question_text, q.option_a, q.option_b, q.option_c, q.option_d
+           q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
+           public.class_attempt_deadline(v_attempt.started_at, v_quiz.time_limit_minutes, v_quiz.end_at),
+           now()
     from public.class_quiz_questions cqq
     join public.questions q on q.id = cqq.question_id
     where cqq.class_quiz_id = p_class_quiz_id
@@ -1085,8 +1121,10 @@ begin
 end;
 $$;
 
--- Nộp bài: chấm điểm ở server (không tin điểm client gửi lên), snapshot đáp án
--- + đáp án đúng vào class_quiz_answers, trả về chi tiết để hiện review ngay.
+-- Nộp bài: chấm ở server. Thay đổi:
+--  * khoá dòng attempt (for update) -> 2 request nộp song song không chấm 2 lần;
+--  * quá hạn + 120s ân hạn -> bỏ toàn bộ đáp án gửi lên, timed_out = true;
+--  * trả thêm cột timed_out (cuối bảng, client cũ không bị ảnh hưởng).
 drop function if exists public.submit_class_quiz_attempt(uuid, jsonb);
 create function public.submit_class_quiz_attempt(p_attempt_id uuid, p_answers jsonb)
 returns table (
@@ -1099,18 +1137,25 @@ returns table (
   correct_answer  text,
   selected_answer text,
   is_correct      boolean,
-  explanation     text
+  explanation     text,
+  timed_out       boolean
 )
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_attempt public.class_quiz_attempts;
-  v_correct integer := 0;
-  v_total   integer := 0;
+  c_grace    constant interval := interval '120 seconds';
+  v_attempt  public.class_quiz_attempts;
+  v_quiz     public.class_quizzes;
+  v_deadline timestamptz;
+  v_late     boolean := false;
+  v_correct  integer := 0;
+  v_total    integer := 0;
 begin
-  select * into v_attempt from public.class_quiz_attempts where id = p_attempt_id;
+  select * into v_attempt from public.class_quiz_attempts a
+  where a.id = p_attempt_id
+  for update;
   if v_attempt.id is null or v_attempt.user_id <> auth.uid() then
     raise exception 'Không tìm thấy bài làm.';
   end if;
@@ -1118,7 +1163,11 @@ begin
     raise exception 'Bài làm này đã được nộp.';
   end if;
 
-  delete from public.class_quiz_answers where attempt_id = p_attempt_id;
+  select * into v_quiz from public.class_quizzes cq where cq.id = v_attempt.class_quiz_id;
+  v_deadline := public.class_attempt_deadline(v_attempt.started_at, v_quiz.time_limit_minutes, v_quiz.end_at);
+  v_late := v_deadline is not null and now() > v_deadline + c_grace;
+
+  delete from public.class_quiz_answers cqa where cqa.attempt_id = p_attempt_id;
 
   insert into public.class_quiz_answers (
     attempt_id, question_id, question_order, question_text,
@@ -1134,8 +1183,13 @@ begin
   from public.class_quiz_questions cqq
   join public.questions q on q.id = cqq.question_id
   left join (
-    select (elem->>'question_id')::uuid as question_id, elem->>'selected_answer' as selected_answer
-    from jsonb_array_elements(coalesce(p_answers, '[]'::jsonb)) elem
+    select distinct on ((elem->>'question_id')::uuid)
+           (elem->>'question_id')::uuid as question_id,
+           upper(nullif(trim(elem->>'selected_answer'), '')) as selected_answer
+    from jsonb_array_elements(
+           case when v_late or jsonb_typeof(p_answers) is distinct from 'array'
+                then '[]'::jsonb else p_answers end
+         ) elem
   ) ans on ans.question_id = cqq.question_id
   where cqq.class_quiz_id = v_attempt.class_quiz_id;
 
@@ -1143,22 +1197,24 @@ begin
     into v_correct, v_total
   from public.class_quiz_answers cqa where cqa.attempt_id = p_attempt_id;
 
-  update public.class_quiz_attempts
+  update public.class_quiz_attempts a
   set status = 'submitted',
       submitted_at = now(),
+      timed_out = v_late,
       correct_count = v_correct,
       total_count = v_total,
       percent = case when v_total > 0 then round(v_correct::numeric / v_total * 100, 1) else 0 end
-  where id = p_attempt_id;
+  where a.id = p_attempt_id;
 
   return query
     select a.question_order, a.question_text, a.option_a, a.option_b, a.option_c, a.option_d,
-           a.correct_answer, a.selected_answer, a.is_correct, a.explanation
+           a.correct_answer, a.selected_answer, a.is_correct, a.explanation, v_late
     from public.class_quiz_answers a
     where a.attempt_id = p_attempt_id
     order by a.question_order asc;
 end;
 $$;
+
 
 -- Xem lại chi tiết 1 lượt làm bài đã nộp (chỉ chủ bài làm).
 drop function if exists public.get_class_quiz_review(uuid);
