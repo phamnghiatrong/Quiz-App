@@ -22,6 +22,8 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `public/favicon.png` | Icon ứng dụng (512x512) |
 | `public/2.png` | Ảnh chữ thương hiệu trên header |
 | `package.json` | Khai báo project tĩnh, không có dependency |
+| `tenses/` | Mục "12 thì tiếng Anh" (nạp lười, vẽ trong Shadow DOM) |
+| `chinese/` | Mục "Tiếng Trung YCT": `chinese.js` (logic), `chinese-data.js` (301 thẻ), `chinese.css`, `img/*.webp` (hình thẻ) |
 
 ## Cài đặt
 
@@ -65,6 +67,38 @@ phục vụ bản cache cũ trong lúc phát triển.
   giáo viên tạo bài kiểm tra từ ngân hàng câu hỏi, học sinh làm bài (đáp án
   không lộ trước khi nộp), hệ thống tự chấm và tổng hợp kết quả tập trung.
   Xem chi tiết ở mục riêng bên dưới.
+- **12 thì tiếng Anh**: lý thuyết, máy lắp câu, phòng luyện, bộ đề 49 câu.
+- **Tiếng Trung YCT**: học từ vựng YCT 1-4 bằng thẻ có hình. Xem mục riêng bên dưới.
+
+## Tiếng Trung YCT (học bằng thẻ)
+
+301 thẻ từ vựng YCT 1-4 (YCT1: 80, YCT2: 69, YCT3: 102, YCT4: 50), mỗi thẻ có
+hình minh hoạ, chữ Hán, pinyin, nghĩa tiếng Việt + tiếng Anh và một cụm/câu ví dụ.
+Nguồn là bộ flashcard YCT dạng PDF ảnh (Lingo Bus): chữ và câu ví dụ được chép
+lại từ mặt sau thẻ, hình cắt từ mặt trước (WebP 320px, tổng ~2,8 MB, chỉ tải khi cần).
+
+5 trang con:
+
+| Trang | Cách học |
+|-------|----------|
+| Lật thẻ | Xem hình + chữ, bấm lật xem nghĩa và câu ví dụ, tự chấm "Đã nhớ / Chưa nhớ" |
+| Nhìn chữ & hình đoán nghĩa | Chọn nghĩa tiếng Việt đúng trong 4 phương án (có thể ẩn hình) |
+| Ghép câu | Xếp các mảnh từ thành câu ví dụ theo nghĩa tiếng Việt (có mảnh thừa) |
+| Chọn chữ đúng | Chọn chữ Hán theo hình + nghĩa, hoặc điền chữ còn thiếu vào câu |
+| Tiến độ & bộ thẻ | Thống kê theo cấp, lưới toàn bộ thẻ, bấm để mở thẻ |
+
+- Lọc theo cấp YCT (chọn nhiều cấp), bật/tắt pinyin, nghĩa tiếng Anh, tự phát âm.
+- Phát âm bằng giọng đọc tiếng Trung có sẵn của trình duyệt/hệ điều hành
+  (Web Speech API, không tốn chi phí). Máy chưa cài giọng tiếng Trung thì app báo.
+- Mức nhớ từng thẻ theo kiểu hộp Leitner (0-5): đúng +1, sai về 0; từ 3 trở lên
+  là "đã thuộc". Lượt luyện chọn thẻ ngẫu nhiên có trọng số, thẻ mới và thẻ hay
+  sai ra nhiều hơn.
+- Tiến độ lưu `localStorage` key `yct-cards-v1:<userId>` (theo tài khoản, theo
+  trình duyệt), chưa đồng bộ Supabase và không tính vào bảng xếp hạng.
+- 36 hình có in sẵn chữ Hán/câu (trường `txt` trong dữ liệu) được ẩn trước khi
+  trả lời ở chế độ Ghép câu và Chọn chữ đúng để không lộ đáp án.
+- Sửa file trong `chinese/` thì tăng `CHINESE_MODULE_URL` (`?v=`) trong `app.js`.
+  Đổi hình thì tăng `IMG_VERSION` trong `chinese-data.js`.
 
 ## Lớp học (kiểm tra theo lớp)
 

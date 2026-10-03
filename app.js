@@ -101,6 +101,9 @@ const elements = {
   tensesView: document.getElementById('tensesView'),
   tensesNav: document.getElementById('tensesNav'),
   tensesHost: document.getElementById('tensesHost'),
+  chineseView: document.getElementById('chineseView'),
+  chineseNav: document.getElementById('chineseNav'),
+  chineseHost: document.getElementById('chineseHost'),
 
   quizTitle: document.getElementById('quizTitle'),
   timerBadge: document.getElementById('timerBadge'),
@@ -769,7 +772,7 @@ function setDashboardContainerMode(mode) {
 
 function setView(viewKey) {
   const isAuthed = !elements.userBadge.hidden;
-  const requiresAuth = ['home', 'account', 'history', 'leaderboard', 'classes', 'tenses'].includes(viewKey);
+  const requiresAuth = ['home', 'account', 'history', 'leaderboard', 'classes', 'tenses', 'chinese'].includes(viewKey);
 
   let targetView = viewKey;
   if (requiresAuth && !isAuthed) {
@@ -794,6 +797,7 @@ function setView(viewKey) {
   if (elements.leaderboardCard) elements.leaderboardCard.hidden = true;
   if (elements.classCard) elements.classCard.hidden = true;
   if (elements.tensesView) elements.tensesView.hidden = true;
+  if (elements.chineseView) elements.chineseView.hidden = true;
   if (elements.aboutCard) elements.aboutCard.hidden = true;
   if (elements.appInfoCard) elements.appInfoCard.hidden = true;
   if (elements.feedbackSection) elements.feedbackSection.hidden = true;
@@ -851,6 +855,12 @@ function setView(viewKey) {
       if (elements.tensesView) elements.tensesView.hidden = false;
       openTenses();
       break;
+    case 'chinese':
+      setDashboardContainerMode('default');
+      showSection('none');
+      if (elements.chineseView) elements.chineseView.hidden = false;
+      openChinese();
+      break;
     case 'author':
       setDashboardContainerMode('default');
       showSection('none');
@@ -899,6 +909,32 @@ async function openTenses() {
     if (!tensesHost.shadowRoot) {
       tensesHost.innerHTML =
         '<p class="status-text error">Không tải được mục 12 thì tiếng Anh. Kiểm tra kết nối mạng rồi bấm lại vào mục này trên menu.</p>';
+    }
+  }
+}
+
+// Mục "Tiếng Trung YCT" (học từ vựng bằng thẻ, thư mục chinese/): nạp lười
+// giống mục 12 thì. Tiến độ từng thẻ lưu theo tài khoản (currentUserId).
+// Nhớ tăng ?v= bên dưới mỗi khi sửa chinese.js / chinese-data.js / chinese.css.
+const CHINESE_MODULE_URL = './chinese/chinese.js?v=20261003-1';
+let chineseModulePromise = null;
+
+async function openChinese() {
+  const { chineseHost, chineseNav, chineseView } = elements;
+  if (!chineseHost || !chineseNav) return;
+  try {
+    if (!chineseModulePromise) chineseModulePromise = import(CHINESE_MODULE_URL);
+    const mod = await chineseModulePromise;
+    await mod.mountChinese(chineseHost, chineseNav, {
+      userId: currentUserId,
+      scrollAnchor: chineseView,
+    });
+  } catch (error) {
+    console.error('[chinese] Không tải được mục Tiếng Trung YCT:', error);
+    chineseModulePromise = null; // cho phép thử lại ở lần bấm sau
+    if (!chineseHost.shadowRoot) {
+      chineseHost.innerHTML =
+        '<p class="status-text error">Không tải được mục Tiếng Trung YCT. Kiểm tra kết nối mạng rồi bấm lại vào mục này trên menu.</p>';
     }
   }
 }
@@ -966,6 +1002,8 @@ function navigateFromSidebar(navKey) {
     scrollToTarget(isAuthed ? elements.classCard : elements.authSection);
   } else if (navKey === 'tenses') {
     scrollToTarget(isAuthed ? elements.tensesView : elements.authSection);
+  } else if (navKey === 'chinese') {
+    scrollToTarget(isAuthed ? elements.chineseView : elements.authSection);
   } else if (navKey === 'author') {
     scrollToTarget(elements.aboutCard);
   } else if (navKey === 'feedback') {

@@ -160,8 +160,10 @@
         padding: 9px 16px !important;
         white-space: nowrap !important;
       }
-      /* Dùng #tensesNav để thắng luật button:not(...) của style-final-fix.css */
-      #tensesNav .tn-nav-btn[data-active="true"] {
+      /* Dùng id (#tensesNav / #chineseNav) để thắng luật button:not(...) của
+         style-final-fix.css. Mục "Tiếng Trung YCT" (chinese/) dùng chung
+         khung .tenses-* và thanh trang con này. */
+      :is(#tensesNav, #chineseNav) .tn-nav-btn[data-active="true"] {
         background: linear-gradient(135deg, #8b5cf6, #6366f1) !important;
         border-color: rgba(139, 92, 246, 0.45) !important;
         color: #ffffff !important;
@@ -170,7 +172,7 @@
         min-width: 0 !important;
       }
       @container (max-width: 640px) {
-        #tensesNav .tn-nav-toggle {
+        :is(#tensesNav, #chineseNav) .tn-nav-toggle {
           display: flex !important;
           width: 100% !important;
           min-height: 54px !important;
@@ -181,22 +183,22 @@
           text-align: left !important;
           border-color: rgba(139, 92, 246, 0.45) !important;
         }
-        #tensesNav .tn-nav-toggle:hover {
+        :is(#tensesNav, #chineseNav) .tn-nav-toggle:hover {
           transform: none !important;
         }
-        #tensesNav .tn-nav-toggle-text {
+        :is(#tensesNav, #chineseNav) .tn-nav-toggle-text {
           display: grid !important;
           gap: 1px !important;
           min-width: 0 !important;
         }
-        #tensesNav .tn-nav-hint {
+        :is(#tensesNav, #chineseNav) .tn-nav-hint {
           font-size: 12px !important;
           font-weight: 600 !important;
           color: #64748b !important;
           text-transform: uppercase !important;
           letter-spacing: 0.06em !important;
         }
-        #tensesNav .tn-nav-current {
+        :is(#tensesNav, #chineseNav) .tn-nav-current {
           font-size: 16px !important;
           font-weight: 700 !important;
           color: #6d28d9 !important;
@@ -204,27 +206,27 @@
           overflow: hidden !important;
           text-overflow: ellipsis !important;
         }
-        #tensesNav .tn-nav-caret {
+        :is(#tensesNav, #chineseNav) .tn-nav-caret {
           color: #8b5cf6 !important;
           font-size: 13px !important;
         }
-        #tensesNav .tn-nav-list {
+        :is(#tensesNav, #chineseNav) .tn-nav-list {
           display: none !important;
         }
-        #tensesNav.is-open .tn-nav-list {
+        :is(#tensesNav, #chineseNav).is-open .tn-nav-list {
           display: grid !important;
           grid-template-columns: 1fr !important;
           gap: 8px !important;
           margin-top: 10px !important;
           padding: 0 !important;
         }
-        #tensesNav.is-open .tn-nav-btn {
+        :is(#tensesNav, #chineseNav).is-open .tn-nav-btn {
           width: 100% !important;
           justify-content: flex-start !important;
           text-align: left !important;
           white-space: normal !important;
         }
-        #tensesNav.is-open .tn-nav-btn:hover {
+        :is(#tensesNav, #chineseNav).is-open .tn-nav-btn:hover {
           transform: none !important;
         }
       }
@@ -282,6 +284,16 @@
                 </svg>
               </span>
               <span class="sidebar-label">12 thì tiếng Anh</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="chinese" title="Tiếng Trung YCT">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <rect x="7.5" y="3.5" width="12" height="15" rx="2" />
+                  <path d="M4.5 7v11.5a2 2 0 0 0 2 2h9" />
+                  <path d="M10.5 8h6M13.5 6.5v8M11 14.5l2.5-3 2.5 3" />
+                </svg>
+              </span>
+              <span class="sidebar-label">Tiếng Trung YCT</span>
             </button>
             <button class="sidebar-item" type="button" data-nav="author" title="Tác giả">
               <span class="sidebar-icon">✎</span>
@@ -553,7 +565,7 @@
                                     <p class="muted-text">
                     Ứng dụng hướng đến sự đơn giản, dễ sử dụng và hiệu quả thực tế, giúp việc ôn tập trở nên nhẹ nhàng hơn nhưng vẫn đảm bảo tính nghiêm túc trong học tập.
                   </p>
-                  <p class="muted-text"><strong>Phiên bản 4.1</strong> cập nhật ngày 30/09/2026</p>
+                  <p class="muted-text"><strong>Phiên bản 4.2</strong> cập nhật ngày 03/10/2026</p>
                 </section>
 
                 <section class="panel about-card">
@@ -561,6 +573,17 @@
                   <h3>Thông tin cập nhật</h3>
 
                   <div class="changelog-list">
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.2</strong>&nbsp;- Cập nhật ngày: 03/10/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm mục "Tiếng Trung YCT": 301 thẻ từ vựng YCT 1-4 có hình minh hoạ, pinyin, nghĩa tiếng Việt và câu ví dụ.</li>
+                          <li>Các chế độ học: lật thẻ, nhìn chữ và hình đoán nghĩa, ghép câu, chọn chữ đúng; có phát âm và theo dõi tiến độ từng thẻ.</li>
+                        </ul>
+                      </div>
+                    </details>
+
                     <details class="changelog-item" open>
                       <summary><strong>Phiên bản 4.1</strong>&nbsp;- Cập nhật ngày: 30/09/2026</summary>
                       <div class="changelog-content">
@@ -645,6 +668,18 @@
             <div id="tensesHost"><p class="muted-text">Đang tải nội dung...</p></div>
           </section>
         </div>
+
+        <!-- Mục "Tiếng Trung YCT" (học từ vựng bằng thẻ): nội dung do chinese/chinese.js dựng.
+             Dùng chung class khung với mục 12 thì. -->
+        <div id="chineseView" class="tenses-view" hidden>
+          <section class="panel tenses-head">
+            <p class="eyebrow">Tiếng Trung YCT</p>
+            <nav id="chineseNav" class="tenses-subnav" aria-label="Các phần của mục Tiếng Trung YCT"></nav>
+          </section>
+          <section class="panel tenses-body">
+            <div id="chineseHost"><p class="muted-text">Đang tải nội dung...</p></div>
+          </section>
+        </div>
       </main>
 
       <footer id="feedbackSection" class="app-footer" hidden>
@@ -662,14 +697,14 @@
               </footer>
 
       <footer id="versionFooter" class="app-footer" hidden aria-label="Phiên bản ứng dụng">
-        <p class="muted-text"><strong>Phiên bản 4.1</strong> cập nhật ngày 30/09/2026</p>
+        <p class="muted-text"><strong>Phiên bản 4.2</strong> cập nhật ngày 03/10/2026</p>
       </footer>
 
         </div>
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20261001-1"></script>
+    <script type="module" src="./app.js?v=20261003-1"></script>
 
   </body>
 </html>
