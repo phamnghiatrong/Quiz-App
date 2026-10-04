@@ -924,9 +924,10 @@ async function openTenses() {
 }
 
 // Mục "Tiếng Trung YCT" (học từ vựng bằng thẻ, thư mục chinese/): nạp lười
-// giống mục 12 thì. Tiến độ từng thẻ lưu theo tài khoản (currentUserId).
+// giống mục 12 thì. Tiến độ thẻ YCT lưu theo tài khoản (currentUserId); từ tự
+// tra ("Sổ từ của tôi") lưu ở bảng vocab_words nên truyền client supabase.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa chinese.js / chinese-data.js / chinese.css.
-const CHINESE_MODULE_URL = './chinese/chinese.js?v=20261003-1';
+const CHINESE_MODULE_URL = './chinese/chinese.js?v=20261004-1';
 let chineseModulePromise = null;
 
 async function openChinese() {
@@ -937,6 +938,7 @@ async function openChinese() {
     const mod = await chineseModulePromise;
     await mod.mountChinese(chineseHost, chineseNav, {
       userId: currentUserId,
+      supabase, // Sổ từ của tôi (bảng vocab_words, lang = 'zh')
       scrollAnchor: chineseView,
     });
   } catch (error) {
@@ -953,7 +955,7 @@ async function openChinese() {
 // Sổ từ lưu ở bảng Supabase vocab_words (cần chạy vocab/vocab-schema.sql) nên
 // truyền client supabase cho module. Nạp lười giống mục 12 thì / Tiếng Trung.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa vocab.js / vocab-api.js / vocab.css.
-const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261004-2';
+const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261004-3';
 let vocabModulePromise = null;
 
 async function openVocab() {
@@ -4109,17 +4111,73 @@ function wireEvents() {
 }
 
 
+// Rời app (chuyển tab, chuyển cửa sổ, tắt màn hình điện thoại):
+// - Luôn lưu nháp bài đang làm và dừng đồng hồ (giống trước đây).
+// - Quay lại trong AWAY_EXIT_MS: giữ nguyên màn hình đang học; nếu bài bị dừng
+//   do rời app (không phải người dùng bấm "Tạm dừng") thì tự chạy tiếp.
+// - Quay lại sau AWAY_EXIT_MS: thoát về trang chủ, bài đã lưu để bấm "Tiếp tục".
+// - Tắt hẳn app: lần mở sau bắt đầu lại từ trang chủ (trạng thái không lưu).
+const AWAY_EXIT_MS = 10 * 60 * 1000;
+let hiddenAt = 0;
+let pausedByHide = false;
+
+// Thông báo nổi ngắn (khung trạng thái của app nằm trong màn đăng nhập nên
+// không thấy khi đang ở trang chủ). Bấm vào để tắt, tự ẩn sau 9 giây.
+function showAppNotice(message) {
+  let el = document.getElementById('appNotice');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'appNotice';
+    el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:9999;max-width:min(92vw,560px);padding:12px 16px;border-radius:12px;background:#1e293b;color:#fff;font-size:15px;line-height:1.45;box-shadow:0 10px 30px rgba(15,23,42,.25);cursor:pointer';
+    el.addEventListener('click', () => { el.hidden = true; });
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.hidden = false;
+  clearTimeout(showAppNotice.timer);
+  showAppNotice.timer = setTimeout(() => { el.hidden = true; }, 9000);
+}
+
 function handleAutoSaveAndPause() {
   if (!questions.length) return;
+  if (!isPaused) pausedByHide = true;
   isPaused = true;
   stopTimer();
   saveDraft();
 }
 
+function handleReturnToApp() {
+  const away = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = 0;
+  const isAuthed = elements.userBadge && !elements.userBadge.hidden;
+  const hadQuiz = Boolean(isQuizVisible() && questions.length);
+  if (away >= AWAY_EXIT_MS && isAuthed && (hadQuiz || (currentView !== 'home' && currentView !== 'auth'))) {
+    pausedByHide = false;
+    navigateFromSidebar('home');
+    const mins = Math.round(AWAY_EXIT_MS / 60000);
+    showAppNotice(
+      hadQuiz
+        ? `Bạn đã rời app hơn ${mins} phút nên bài làm đã được lưu và tạm dừng. Bấm "Tiếp tục" để làm tiếp.`
+        : `Bạn đã rời app hơn ${mins} phút nên app đã quay về trang chủ.`
+    );
+    return;
+  }
+  if (pausedByHide && isQuizVisible() && questions.length) {
+    pausedByHide = false;
+    isPaused = true; // để resumeQuiz chạy đúng nhánh
+    resumeQuiz();
+  }
+  pausedByHide = false;
+}
+
 window.addEventListener('pagehide', handleAutoSaveAndPause);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
+    hiddenAt = Date.now();
     handleAutoSaveAndPause();
+  } else if (document.visibilityState === 'visible') {
+    handleReturnToApp();
   }
 });
 
@@ -4202,6 +4260,13 @@ if (!configError) {
 
     // Phiên ban đầu đã được checkSession xử lý
     if (event === 'INITIAL_SESSION') {
+      return;
+    }
+
+    // Supabase phát lại SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED mỗi khi tab
+    // được mở lại hoặc làm mới token. Cùng một tài khoản thì không làm gì, nếu
+    // không app sẽ nhảy về trang chủ và mất màn hình đang học.
+    if (session?.user && currentUserId && session.user.id === currentUserId) {
       return;
     }
 

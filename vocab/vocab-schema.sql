@@ -1,12 +1,15 @@
--- Chạy file này 1 lần trong Supabase > SQL Editor (chạy lại nhiều lần cũng an toàn).
--- Tạo bảng sổ từ cho mục "Từ vựng tiếng Anh" (vocab/vocab.js).
--- =====================================================================
--- Mục "Từ vựng tiếng Anh" (vocab/): sổ từ riêng của từng người dùng.
--- Mỗi dòng là 1 từ người dùng đã tra; mức nhớ kiểu hộp Leitner (0-5).
--- =====================================================================
+-- Chạy file này trong Supabase > SQL Editor (dán toàn bộ > Run).
+-- Chạy lại nhiều lần cũng an toàn, KHÔNG xoá dữ liệu:
+--   - chưa có bảng: tạo mới;
+--   - đã có bảng từ bản trước (chưa có cột lang): tự nâng cấp.
+-- Bảng sổ từ dùng chung cho mục "Từ vựng tiếng Anh" (vocab/, lang = 'en')
+-- và "Tiếng Trung YCT" (chinese/, lang = 'zh'). Mức nhớ kiểu hộp Leitner (0-5).
+-- Với tiếng Trung: word = chữ Hán, ipa = pinyin.
+
 create table if not exists public.vocab_words (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  lang         text not null default 'en',
   word         text not null check (char_length(btrim(word)) between 1 and 64),
   ipa          text not null default '' check (char_length(ipa) <= 200),
   meaning_vi   text not null default '' check (char_length(meaning_vi) <= 500),
@@ -22,10 +25,20 @@ create table if not exists public.vocab_words (
   updated_at   timestamptz not null default now()
 );
 
-create unique index if not exists vocab_words_user_word_uidx on public.vocab_words (user_id, lower(word));
+-- Nâng cấp bảng tạo từ bản đầu (04/10/2026) chưa có cột lang.
+alter table public.vocab_words add column if not exists lang text not null default 'en';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'vocab_words_lang_check') then
+    alter table public.vocab_words add constraint vocab_words_lang_check check (lang in ('en', 'zh'));
+  end if;
+end $$;
+
+drop index if exists public.vocab_words_user_word_uidx;
+create unique index if not exists vocab_words_user_lang_word_uidx on public.vocab_words (user_id, lang, lower(word));
 create index if not exists vocab_words_user_created_idx on public.vocab_words (user_id, created_at desc);
 
--- Cập nhật updated_at + giới hạn 3000 từ / người (chống ghi tràn).
+-- Cập nhật updated_at + giới hạn 3000 từ / người / ngôn ngữ (chống ghi tràn).
 create or replace function public.vocab_words_before_write()
 returns trigger
 language plpgsql
@@ -35,11 +48,12 @@ begin
   new.updated_at := now();
   new.word := btrim(new.word);
   if tg_op = 'INSERT' then
-    if (select count(*) from public.vocab_words w where w.user_id = new.user_id) >= 3000 then
+    if (select count(*) from public.vocab_words w where w.user_id = new.user_id and w.lang = new.lang) >= 3000 then
       raise exception 'Sổ từ đã đủ 3000 từ, hãy xoá bớt từ cũ.' using errcode = 'P0001';
     end if;
   else
     new.user_id := old.user_id;      -- không cho đổi chủ
+    new.lang := old.lang;
     new.created_at := old.created_at;
   end if;
   return new;

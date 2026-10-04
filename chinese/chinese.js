@@ -6,13 +6,21 @@
  * - Nội dung vẽ trong Shadow DOM của `host`: CSS của app không đè vào được.
  * - `nav` là thanh chuyển trang con nằm ngoài Shadow DOM, dùng nút chuẩn của
  *   app (CSS trong index.html, chung với #tensesNav).
- * - Tiến độ từng thẻ lưu trong localStorage, tách theo tài khoản.
+ * - Tiến độ từng thẻ YCT lưu trong localStorage, tách theo tài khoản.
+ * - "Sổ từ của tôi" (từ người dùng tự tra) lưu ở bảng Supabase vocab_words
+ *   với lang = 'zh' (dùng chung bảng với mục Từ vựng tiếng Anh; word = chữ Hán,
+ *   ipa = pinyin), mức nhớ lưu luôn trong bảng nên đổi máy vẫn còn.
  *
- * 5 trang con:
+ * 8 trang con:
+ *   tra-tu      Tra từ mới: gõ chữ Hán hoặc nghĩa tiếng Việt -> pinyin, nghĩa, câu ví dụ;
+ *               tự lưu vào Sổ từ của tôi
  *   lat-the     Lật thẻ: xem hình + chữ, lật xem nghĩa và câu ví dụ, tự chấm nhớ/chưa nhớ
+ *               (bộ thẻ: YCT, Sổ từ của tôi, hoặc cả hai)
  *   doan-nghia  Nhìn chữ & hình, chọn nghĩa tiếng Việt đúng (4 lựa chọn)
  *   ghep-cau    Xếp các mảnh từ thành câu ví dụ theo nghĩa tiếng Việt
  *   chon-chu    Chọn chữ Hán đúng: theo hình + nghĩa, hoặc điền chỗ trống trong câu
+ *   nghe-viet   Nghe đọc rồi gõ lại chữ Hán hoặc pinyin (bộ thẻ như Lật thẻ)
+ *   so-tu       Sổ từ của tôi: tìm, lọc, xoá, chia trang 10 từ
  *   tien-do     Thống kê theo cấp YCT + lưới toàn bộ thẻ
  *
  * Mức nhớ mỗi thẻ (s, 0-5) theo kiểu hộp Leitner: trả lời đúng / "Đã nhớ" +1,
@@ -25,36 +33,41 @@ const STORE_PREFIX = 'yct-cards-v1';
 const KNOWN_AT = 3;
 
 export const PAGES = [
+  { id: 'tra-tu', label: 'Tra từ mới' },
   { id: 'lat-the', label: 'Lật thẻ' },
   { id: 'doan-nghia', label: 'Nhìn chữ & hình đoán nghĩa' },
   { id: 'ghep-cau', label: 'Ghép câu' },
   { id: 'chon-chu', label: 'Chọn chữ đúng' },
+  { id: 'nghe-viet', label: 'Nghe & viết' },
+  { id: 'so-tu', label: 'Sổ từ của tôi' },
   { id: 'tien-do', label: 'Tiến độ & bộ thẻ' },
 ];
+const TABLE = 'vocab_words';
 
-let assets = null; // { data, css }
+let assets = null; // { data, css, zapi }
 let mounted = null; // { host, key, api }
 let keyBound = false;
 
 async function loadAssets() {
   if (assets) return assets;
-  const [data, css] = await Promise.all([
+  const [data, css, zapi] = await Promise.all([
     import('./chinese-data.js' + VERSION),
     fetch(new URL('./chinese.css' + VERSION, import.meta.url)).then((r) => {
       if (!r.ok) throw new Error('Không tải được chinese.css (' + r.status + ')');
       return r.text();
     }),
+    import('./chinese-api.js' + VERSION),
   ]);
-  assets = { data, css };
+  assets = { data, css, zapi };
   return assets;
 }
 
 /** Gắn mục vào trang. Gọi lại nhiều lần được; đổi tài khoản thì dựng lại. */
-export async function mountChinese(host, nav, { userId = null, scrollAnchor = null } = {}) {
-  const { data, css } = await loadAssets();
+export async function mountChinese(host, nav, { userId = null, supabase = null, scrollAnchor = null } = {}) {
+  const { data, css, zapi } = await loadAssets();
   const key = STORE_PREFIX + (userId ? ':' + userId : '');
   if (mounted && mounted.host === host && mounted.key === key) return mounted.api;
-  const api = build({ host, nav, key, data, css, scrollAnchor });
+  const api = build({ host, nav, key, data, css, zapi, supabase, scrollAnchor });
   mounted = { host, key, api };
   if (!keyBound) {
     keyBound = true;
@@ -65,15 +78,18 @@ export async function mountChinese(host, nav, { userId = null, scrollAnchor = nu
 
 /* ====================================================================== */
 
-function build({ host, nav, key, data, css, scrollAnchor }) {
+function build({ host, nav, key, data, css, zapi, supabase, scrollAnchor }) {
   const { CARDS, IMG_VERSION } = data;
+  const { lookupZh, examplesZh, hasHan, onlyHan, plainPinyin } = zapi;
   const byId = Object.fromEntries(CARDS.map((c) => [c.id, c]));
+  const byHanzi = new Map();
+  CARDS.forEach((c) => { if (!byHanzi.has(c.h)) byHanzi.set(c.h, c); });
   const LEVELS = [1, 2, 3, 4];
 
   const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
 
   /* ---------------- lưu trạng thái theo tài khoản ---------------- */
-  let store = { page: 'lat-the', levels: [1], py: true, en: false, auto: false, hidePic: false, len: 10, st: {}, fc: { i: 0, only: false, shuffle: false } };
+  let store = { page: 'lat-the', levels: [1], py: true, en: false, auto: false, hidePic: false, len: 10, st: {}, fc: { i: 0, only: false, shuffle: false, src: 'yct' }, nv: { src: 'yct', hintPy: false, hintVi: true }, nb: { filter: 'all', sort: 'new' } };
   try {
     const raw = localStorage.getItem(key);
     if (raw) store = Object.assign(store, JSON.parse(raw));
@@ -82,7 +98,12 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   store.levels = store.levels.filter((l) => LEVELS.includes(l));
   if (!store.levels.length) store.levels = [1];
   store.st = store.st && typeof store.st === 'object' ? store.st : {};
-  store.fc = Object.assign({ i: 0, only: false, shuffle: false }, store.fc || {});
+  store.fc = Object.assign({ i: 0, only: false, shuffle: false, src: 'yct' }, store.fc || {});
+  store.nv = Object.assign({ src: 'yct', hintPy: false, hintVi: true }, store.nv || {});
+  store.nb = Object.assign({ filter: 'all', sort: 'new' }, store.nb || {});
+  const SRC_OK = ['yct', 'mine', 'all'];
+  if (!SRC_OK.includes(store.fc.src)) store.fc.src = 'yct';
+  if (!SRC_OK.includes(store.nv.src)) store.nv.src = 'yct';
   if (![10, 20, 30].includes(store.len)) store.len = 10;
   function save() {
     try { localStorage.setItem(key, JSON.stringify(store)); } catch (e) { /* hết chỗ / chế độ riêng tư */ }
@@ -93,10 +114,10 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   const smooth = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
   const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const imgUrl = (id) => new URL(`./img/${id}.webp?v=${IMG_VERSION}`, import.meta.url).href;
-  const img = (c, tag = 'figure') => `<${tag} class="pic"><img src="${imgUrl(c.id)}" width="320" height="290" alt="Hình minh hoạ" loading="lazy" decoding="async"></${tag}>`;
+  const img = (c, tag = 'figure') => (c.mine ? '' : `<${tag} class="pic"><img src="${imgUrl(c.id)}" width="320" height="290" alt="Hình minh hoạ" loading="lazy" decoding="async"></${tag}>`);
   // Hình có in sẵn chữ Hán (c.txt) sẽ lộ đáp án ở chế độ Ghép câu / Chọn chữ: chỉ hiện sau khi trả lời.
   const picHidden = (c, S) => Boolean(c.txt) && !S.answered;
-  const preload = (c) => { if (c) { const i = new Image(); i.src = imgUrl(c.id); } };
+  const preload = (c) => { if (c && !c.mine) { const i = new Image(); i.src = imgUrl(c.id); } };
 
   /* ---------------- phát âm (giọng đọc có sẵn của trình duyệt) ---------------- */
   const canSpeak = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
@@ -129,8 +150,85 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   const SAY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
   const sayBtn = (t, sm = false) => `<button class="say${sm ? ' sm' : ''}" type="button" data-say="${esc(t)}" aria-label="Nghe phát âm" title="Nghe phát âm">${SAY_SVG}</button>`;
 
+  /* ---------------- Sổ từ của tôi (Supabase, lang = 'zh') ---------------- */
+  let mine = []; // các dòng vocab_words, mới nhất trước
+  let mineState = 'loading'; // loading | ready | missing | upgrade | error | nodb
+  let mineErr = '';
+  const mineCards = new Map(); // 'u:<id>' -> thẻ dạng giống CARDS
+  const arr = (x) => (Array.isArray(x) ? x : []);
+  function toCard(r) {
+    const ex = arr(r.examples)[0] || null;
+    const senses = arr(r.senses);
+    return {
+      id: 'u:' + r.id, rowId: r.id, mine: true, lv: 0, h: r.word, py: r.ipa || '',
+      vi: (r.meaning_vi || '').trim() || (senses[0] && arr(senses[0].vi)[0]) || '',
+      en: senses.flatMap((x) => arr(x.en)).slice(0, 3).join(', '),
+      ex: ex ? ex.zh || '' : '', exPy: ex ? ex.py || '' : '', exVi: ex ? ex.vi || '' : '', exEn: ex ? ex.en || '' : '',
+    };
+  }
+  function normRow(r) {
+    return { ...r, senses: arr(r.senses), examples: arr(r.examples), level: r.level || 0, correct: r.correct || 0, wrong: r.wrong || 0, lookups: r.lookups || 1 };
+  }
+  function rebuildMineCards() {
+    mineCards.clear();
+    mine.forEach((r) => mineCards.set('u:' + r.id, toCard(r)));
+  }
+  const getCard = (id) => byId[id] || mineCards.get(id) || null;
+  const mineRow = (id) => mine.find((r) => r.id === String(id).replace(/^u:/, '')) || null;
+  const mineByWord = (h) => mine.find((r) => r.word === h) || null;
+  function dbErrText(err) {
+    const m = String((err && (err.message || err.details)) || err || '');
+    // Thiếu cột lang phải kiểm tra trước: lỗi "column vocab_words.lang does not exist" cũng khớp mẫu "bảng không tồn tại".
+    if (err && (err.code === '42703' || err.code === 'PGRST204') && /lang/.test(m)) { mineState = 'upgrade'; return 'Bảng vocab_words chưa có cột lang.'; }
+    if (err && (err.code === '42P01' || err.code === 'PGRST205' || (/vocab_words/.test(m) && !/column/i.test(m) && /(does not exist|could not find|schema cache)/i.test(m)))) { mineState = 'missing'; return 'Chưa tạo bảng vocab_words.'; }
+    return /fetch|network/i.test(m) ? 'Mất kết nối mạng.' : m || 'Lỗi không rõ';
+  }
+  async function loadMine() {
+    if (!supabase) { mineState = 'nodb'; return; }
+    mineState = 'loading';
+    const { data: rows, error } = await supabase.from(TABLE).select('*').eq('lang', 'zh').order('created_at', { ascending: false }).limit(3000);
+    if (error) {
+      mineErr = dbErrText(error);
+      if (mineState === 'loading') mineState = 'error';
+      mine = [];
+    } else {
+      mine = (rows || []).map(normRow);
+      mineState = 'ready';
+    }
+    rebuildMineCards();
+  }
+  async function dbInsert(row) {
+    const { data: d, error } = await supabase.from(TABLE).insert({ ...row, lang: 'zh' }).select().single();
+    if (error) throw error;
+    return normRow(d);
+  }
+  async function dbUpdate(id, patch) {
+    const { data: d, error } = await supabase.from(TABLE).update(patch).eq('id', id).select().single();
+    if (error) throw error;
+    return normRow(d);
+  }
+  async function dbDelete(id) {
+    const { error } = await supabase.from(TABLE).delete().eq('id', id);
+    if (error) throw error;
+  }
+  function putMine(row) {
+    const k = mine.findIndex((r) => r.id === row.id);
+    if (k >= 0) mine[k] = row; else mine.unshift(row);
+    mineCards.set('u:' + row.id, toCard(row));
+  }
+  function mineNotice() {
+    if (mineState === 'missing') return '<div class="notice warn"><b>Chưa lưu được Sổ từ của tôi.</b> Cơ sở dữ liệu chưa có bảng <code>vocab_words</code>. Quản trị viên chạy file <code>vocab/vocab-schema.sql</code> trong Supabase (SQL Editor &gt; dán &gt; Run). Trong lúc chờ vẫn tra từ được nhưng không lưu.</div>';
+    if (mineState === 'upgrade') return '<div class="notice warn"><b>Cần nâng cấp bảng sổ từ.</b> Bảng <code>vocab_words</code> chưa có cột <code>lang</code> để tách từ tiếng Anh và tiếng Trung. Quản trị viên chạy lại file <code>vocab/vocab-schema.sql</code> trong Supabase (an toàn, không mất dữ liệu). Trong lúc chờ vẫn tra từ được nhưng không lưu.</div>';
+    if (mineState === 'error') return `<div class="notice bad"><b>Không tải được Sổ từ của tôi:</b> ${esc(mineErr)} <button type="button" class="linkbtn" data-act="mine-reload">Thử lại</button></div>`;
+    if (mineState === 'nodb') return '<div class="notice warn">Không kết nối được cơ sở dữ liệu nên từ tra sẽ không được lưu.</div>';
+    return '';
+  }
+
   /* ---------------- mức nhớ ---------------- */
-  const stOf = (id) => store.st[id] || null;
+  const stOf = (id) => {
+    if (String(id).startsWith('u:')) { const r = mineRow(id); return r && (r.correct || r.wrong || r.level) ? { s: r.level, c: r.correct, w: r.wrong } : null; }
+    return store.st[id] || null;
+  };
   function status(id) {
     const s = stOf(id);
     if (!s) return 'new';
@@ -139,6 +237,14 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   const STATUS_LABEL = { new: 'Chưa học', learn: 'Đang học', known: 'Đã thuộc' };
   const badge = (id) => { const s = status(id); return `<span class="badge s-${s}">${STATUS_LABEL[s]}</span>`; };
   function grade(id, ok) {
+    if (String(id).startsWith('u:')) {
+      const r = mineRow(id);
+      if (!r) return;
+      if (ok) { r.correct += 1; r.level = Math.min(5, r.level + 1); } else { r.wrong += 1; r.level = 0; }
+      r.last_review = new Date().toISOString();
+      if (mineState === 'ready') dbUpdate(r.id, { level: r.level, correct: r.correct, wrong: r.wrong, last_review: r.last_review }).catch((e) => toast('Chưa lưu được kết quả ôn: ' + dbErrText(e), 'bad'));
+      return;
+    }
     const s = store.st[id] || (store.st[id] = { s: 0, c: 0, w: 0 });
     if (ok) { s.c += 1; s.s = Math.min(5, s.s + 1); } else { s.w += 1; s.s = 0; }
     s.t = Date.now();
@@ -148,6 +254,10 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   function weight(id) { const s = stOf(id); return s ? WEIGHT[s.s] ?? 1 : WEIGHT.new; }
 
   const pool = () => CARDS.filter((c) => store.levels.includes(c.lv));
+  /** Bộ thẻ cho Lật thẻ / Nghe & viết: YCT (cấp đang chọn), Sổ từ của tôi, hoặc cả hai. */
+  const poolBySrc = (src) => [...(src !== 'mine' ? pool() : []), ...(src !== 'yct' ? [...mineCards.values()] : [])];
+  const SRC_LABEL = { yct: 'Thẻ YCT', mine: 'Sổ từ của tôi', all: 'Cả hai' };
+  const srcChips = (act, cur) => `<span class="src-chips" role="group" aria-label="Chọn bộ thẻ"><span class="tb-label">Bộ thẻ</span>${['yct', 'mine', 'all'].map((k) => `<button type="button" class="chip" data-act="${act}" data-src="${k}" aria-pressed="${cur === k}">${SRC_LABEL[k]}${k === 'mine' ? ` <span class="n">${mine.length}</span>` : ''}</button>`).join('')}</span>`;
 
   /* ---------------- chọn câu hỏi & phương án nhiễu ---------------- */
   function pickItems(cands, n) {
@@ -212,6 +322,20 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     <p class="tts-note" id="ttsNote" hidden>Máy này chưa có giọng đọc tiếng Trung nên nút loa có thể không phát âm. Trên Windows: Cài đặt &gt; Thời gian &amp; ngôn ngữ &gt; Giọng nói, thêm giọng tiếng Trung (giản thể).</p>
   </div>
 
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <section class="page" data-page="tra-tu" aria-labelledby="h-tra-tu" hidden>
+    <div class="sec-head"><h2 id="h-tra-tu">Tra từ mới</h2><p>Gõ chữ Hán (ví dụ 学习) hoặc nghĩa tiếng Việt (ví dụ "học tập"). App tìm pinyin, nghĩa, câu ví dụ và tự lưu vào Sổ từ của tôi để ôn bằng thẻ hoặc nghe - viết.</p></div>
+    <div id="zNote"></div>
+    <form class="lk-form" id="zLkForm" autocomplete="off">
+      <label class="sr-only" for="zLkInput">Từ cần tra</label>
+      <input id="zLkInput" class="input" type="search" enterkeyhint="search" placeholder="Chữ Hán hoặc nghĩa tiếng Việt, ví dụ: 电脑 / máy tính" maxlength="40" autocapitalize="off" spellcheck="false">
+      <button class="btn primary" type="submit">Tra từ</button>
+    </form>
+    <div id="zLkResult" aria-live="polite"></div>
+    <div id="zRecent"></div>
+  </section>
+
   <section class="page" data-page="lat-the" aria-labelledby="h-lat-the">
     <div class="sec-head"><h2 id="h-lat-the">Lật thẻ</h2><p>Nhìn hình và chữ Hán, thử nhớ nghĩa rồi bấm vào thẻ để lật xem nghĩa và câu ví dụ. Tự chấm "Đã nhớ" hoặc "Chưa nhớ" để app biết thẻ nào cần ôn thêm.</p></div>
     <div id="fc"></div>
@@ -232,6 +356,16 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     <div id="qz-chon-chu" class="quiz"></div>
   </section>
 
+  <section class="page" data-page="nghe-viet" aria-labelledby="h-nghe-viet" hidden>
+    <div class="sec-head"><h2 id="h-nghe-viet">Nghe &amp; viết</h2><p>Nghe đọc một từ rồi gõ lại bằng chữ Hán hoặc pinyin (pinyin không cần dấu thanh, ví dụ "xuexi"). Bấm Enter để kiểm tra và sang câu tiếp.</p></div>
+    <div id="qz-nghe-viet" class="quiz"></div>
+  </section>
+
+  <section class="page" data-page="so-tu" aria-labelledby="h-so-tu" hidden>
+    <div class="sec-head"><h2 id="h-so-tu">Sổ từ của tôi</h2><p>Các từ bạn đã tra ở trang Tra từ mới. Ôn các từ này ở Lật thẻ hoặc Nghe &amp; viết bằng cách chọn bộ thẻ "Sổ từ của tôi".</p></div>
+    <div id="zNb"></div>
+  </section>
+
   <section class="page" data-page="tien-do" aria-labelledby="h-tien-do" hidden>
     <div class="sec-head"><h2 id="h-tien-do">Tiến độ &amp; bộ thẻ</h2><p>Thẻ được tính là "đã thuộc" khi trả lời đúng hoặc tự chấm "Đã nhớ" 3 lần liên tiếp; trả lời sai sẽ đưa thẻ về "đang học". Bấm vào một thẻ để mở nó ở chế độ Lật thẻ.</p></div>
     <div id="prog"></div>
@@ -239,6 +373,16 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
 </div>`;
   const $ = (id) => root.getElementById(id);
   const yc = $('yc');
+  let toastTimer = 0;
+  function toast(msg, kind = '') {
+    const t = $('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.className = 'toast' + (kind ? ' ' + kind : '');
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 4500);
+  }
   if (voicesChecked) $('ttsNote').hidden = Boolean(zhVoice);
 
   function syncToolbar() {
@@ -295,6 +439,8 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     save();
     if (id === 'lat-the') renderFc();
     else if (id === 'tien-do') renderProgress();
+    else if (id === 'tra-tu') { renderLookup(); renderRecent(); }
+    else if (id === 'so-tu') renderNotebook();
     else renderQuiz(id);
     if (scroll) scrollToTop();
   }
@@ -304,7 +450,7 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
   let fcBack = false;
   let fcJustRated = null;
   function buildFcList() {
-    let list = pool();
+    let list = poolBySrc(store.fc.src);
     if (store.fc.only) list = list.filter((c) => status(c.id) !== 'known');
     let ids = list.map((c) => c.id);
     if (store.fc.shuffle) ids = shuffle(ids);
@@ -316,15 +462,20 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     const box = $('fc');
     const total = fcList.length;
     const ctrl = `<div class="fc-nav">
+      ${srcChips('fc-src', store.fc.src)}
       <button type="button" class="chip toggle" data-act="fc-shuffle" aria-pressed="${store.fc.shuffle}">Trộn thứ tự</button>
       <button type="button" class="chip toggle" data-act="fc-only" aria-pressed="${store.fc.only}">Chỉ thẻ chưa thuộc</button>
       <button type="button" class="chip" data-act="fc-first">Về thẻ đầu</button>
     </div>`;
     if (!total) {
-      box.innerHTML = `<div class="fc-wrap">${ctrl}<div class="fc-empty">${store.fc.only ? 'Bạn đã thuộc hết thẻ của cấp độ đang chọn. Tắt "Chỉ thẻ chưa thuộc" để xem lại toàn bộ.' : 'Chưa có thẻ nào. Hãy chọn ít nhất một cấp YCT ở trên.'}</div></div>`;
+      const emptyMsg = store.fc.only ? 'Bạn đã thuộc hết thẻ của bộ đang chọn. Tắt "Chỉ thẻ chưa thuộc" để xem lại toàn bộ.'
+        : store.fc.src === 'mine' ? (mineState === 'loading' ? 'Đang tải Sổ từ của tôi...' : 'Sổ từ của tôi đang trống. <button type="button" class="linkbtn" data-act="goto" data-page="tra-tu">Tra từ mới</button> để thêm từ.')
+        : 'Chưa có thẻ nào. Hãy chọn ít nhất một cấp YCT ở trên.';
+      box.innerHTML = `<div class="fc-wrap">${ctrl}<div class="fc-empty">${emptyMsg}</div></div>`;
       return;
     }
-    const c = byId[fcList[store.fc.i]];
+    const c = getCard(fcList[store.fc.i]);
+    if (!c) { fcList = null; renderFc(); return; }
     const back = c.ex
       ? `<div class="fc-hzsm">${esc(c.h)}</div>
          <div class="fc-vi">${esc(c.vi)}</div>
@@ -341,10 +492,10 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
          <div class="fc-en en-opt">${esc(c.en)}</div>`;
     box.innerHTML = `<div class="fc-wrap">
       ${ctrl}
-      <div class="fc-meta"><span>Thẻ <b>${store.fc.i + 1}</b>/${total}</span><span>YCT ${c.lv}</span>${badge(c.id)}${fcJustRated ? `<span class="muted small">${esc(fcJustRated)}</span>` : ''}<span class="fc-keys small">Phím tắt: Space lật thẻ · ← → chuyển thẻ · 1 chưa nhớ · 2 đã nhớ</span></div>
+      <div class="fc-meta"><span>Thẻ <b>${store.fc.i + 1}</b>/${total}</span><span>${c.mine ? 'Sổ từ của tôi' : 'YCT ' + c.lv}</span>${badge(c.id)}${fcJustRated ? `<span class="muted small">${esc(fcJustRated)}</span>` : ''}<span class="fc-keys small">Phím tắt: Space lật thẻ · ← → chuyển thẻ · 1 chưa nhớ · 2 đã nhớ</span></div>
       <button type="button" class="flip${fcBack ? ' is-back' : ''}" data-act="flip" aria-label="Lật thẻ (phím cách)">
         <span class="flip-inner">
-          <span class="face front" aria-hidden="${fcBack}">
+          <span class="face front${c.mine ? ' no-pic' : ''}" aria-hidden="${fcBack}">
             ${img(c, 'span')}
             <span class="fc-hz">${esc(c.h)}</span>
             <span class="fc-py py py-opt">${esc(c.py)}</span>
@@ -361,7 +512,7 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
         <button type="button" class="btn nav-btn" data-act="fc-next" aria-label="Thẻ sau">›</button>
       </div>
     </div>`;
-    preload(byId[fcList[store.fc.i + 1]]);
+    preload(getCard(fcList[store.fc.i + 1]));
     if (store.auto && !fcBack) speak(c.h);
   }
   function fcGo(delta) {
@@ -376,7 +527,7 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     if (!fcList || !fcList.length) return;
     const id = fcList[store.fc.i];
     grade(id, ok);
-    const c = byId[id];
+    const c = getCard(id);
     fcJustRated = ok ? `Đã ghi nhớ "${c.h}"` : `Sẽ ôn lại "${c.h}"`;
     if (store.fc.only && status(id) === 'known') {
       fcList.splice(store.fc.i, 1);
@@ -396,33 +547,42 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     'doan-nghia': { eligible: () => pool(), make: makeMeaningQ, render: renderMeaningQ },
     'ghep-cau': { eligible: () => pool().filter((c) => c.tok && c.tok.length >= 2), make: makeBuildQ, render: renderBuildQ },
     'chon-chu': { eligible: () => pool(), make: makePickQ, render: renderPickQ },
+    'nghe-viet': { eligible: () => poolBySrc(store.nv.src), make: makeListenQ, render: renderListenQ },
   };
   const sessions = {}; // mode -> { items, i, right, log, q, answered }
 
   function startSession(mode, ids = null) {
     const elig = MODES[mode].eligible();
-    const items = ids ? ids.filter((id) => byId[id]) : pickItems(elig, store.len);
+    const items = ids ? ids.filter((id) => getCard(id)) : pickItems(elig, store.len);
     sessions[mode] = { items, i: 0, right: 0, log: [], q: null, answered: false };
-    if (items.length) sessions[mode].q = MODES[mode].make(byId[items[0]]);
-    preload(byId[items[1]]);
+    if (items.length) sessions[mode].q = MODES[mode].make(getCard(items[0]));
+    preload(getCard(items[1]));
   }
   function renderQuiz(mode) {
     if (!sessions[mode]) startSession(mode);
     const S = sessions[mode];
     const box = $('qz-' + mode);
     if (!S.items.length) {
-      box.innerHTML = `<div class="fc-empty">${mode === 'ghep-cau' ? 'Cấp độ đang chọn chưa có câu ví dụ nào để ghép.' : 'Chưa có thẻ nào. Hãy chọn ít nhất một cấp YCT ở trên.'}</div>`;
+      const msg = mode === 'ghep-cau' ? 'Cấp độ đang chọn chưa có câu ví dụ nào để ghép.'
+        : mode === 'nghe-viet' && store.nv.src === 'mine' ? 'Sổ từ của tôi đang trống. <button type="button" class="linkbtn" data-act="goto" data-page="tra-tu">Tra từ mới</button> để thêm từ, hoặc chọn bộ thẻ YCT.'
+        : 'Chưa có thẻ nào. Hãy chọn ít nhất một cấp YCT ở trên.';
+      box.innerHTML = `${mode === 'nghe-viet' ? `<div class="row">${srcChips('nv-src', store.nv.src)}</div>` : ''}<div class="fc-empty">${msg}</div>`;
       return;
     }
     if (S.i >= S.items.length) { renderDone(mode); return; }
     const pct = Math.round((S.i / S.items.length) * 100);
     const top = `<div class="q-top">
         <span>Câu <b>${S.i + 1}</b>/${S.items.length} · Đúng <b>${S.right}</b></span>
-        <span class="row">${mode === 'doan-nghia' ? `<button type="button" class="chip toggle" data-act="opt" data-opt="hidePic" aria-pressed="${store.hidePic}" title="Chỉ nhìn chữ, không xem hình">Ẩn hình</button>` : ''}<button type="button" class="linkbtn" data-act="restart" data-mode="${mode}">Làm lượt mới</button></span>
+        <span class="row">${mode === 'doan-nghia' ? `<button type="button" class="chip toggle" data-act="opt" data-opt="hidePic" aria-pressed="${store.hidePic}" title="Chỉ nhìn chữ, không xem hình">Ẩn hình</button>` : ''}${mode === 'nghe-viet' ? `<button type="button" class="chip toggle" data-act="nv-hint" data-h="hintPy" aria-pressed="${store.nv.hintPy}">Gợi ý pinyin</button><button type="button" class="chip toggle" data-act="nv-hint" data-h="hintVi" aria-pressed="${store.nv.hintVi}">Gợi ý nghĩa</button>` : ''}<button type="button" class="linkbtn" data-act="restart" data-mode="${mode}">Làm lượt mới</button></span>
         <div class="q-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
       </div>`;
-    box.innerHTML = top + `<div class="q-card" id="qc-${mode}">${MODES[mode].render(S.q, S)}</div>`;
+    box.innerHTML = (mode === 'nghe-viet' ? `<div class="row">${srcChips('nv-src', store.nv.src)}</div>` : '') + top + `<div class="q-card" id="qc-${mode}">${MODES[mode].render(S.q, S)}</div>`;
     if (store.auto && mode === 'doan-nghia' && !S.answered) speak(S.q.c.h);
+    if (mode === 'nghe-viet' && !S.answered) {
+      if (!S.q.spoken) { S.q.spoken = true; speak(S.q.c.h); }
+      const inp = $('nvInput');
+      if (inp) inp.focus({ preventScroll: true });
+    }
   }
   function nextQ(mode) {
     const S = sessions[mode];
@@ -430,8 +590,8 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     S.i += 1;
     S.answered = false;
     if (S.i < S.items.length) {
-      S.q = MODES[mode].make(byId[S.items[S.i]]);
-      preload(byId[S.items[S.i + 1]]);
+      S.q = MODES[mode].make(getCard(S.items[S.i]));
+      preload(getCard(S.items[S.i + 1]));
     }
     renderQuiz(mode);
     scrollIntoViewIfAbove($('qz-' + mode));
@@ -616,12 +776,12 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     const S = sessions[mode];
     const n = S.items.length;
     const p = Math.round((S.right / n) * 100);
-    const miss = S.log.filter((x) => !x.ok).map((x) => byId[x.id]);
+    const miss = [...new Set(S.log.filter((x) => !x.ok).map((x) => x.id))].map(getCard).filter(Boolean);
     const msg = p === 100 ? 'Xuất sắc, đúng hết!' : p >= 80 ? 'Rất tốt!' : p >= 50 ? 'Khá rồi, ôn thêm chút nữa nhé.' : 'Cần ôn thêm. Thử chế độ Lật thẻ với các từ sai bên dưới.';
     $('qz-' + mode).innerHTML = `<div class="q-card"><div class="done">
       <div class="score-ring" style="--p:${p}"><span>${S.right}/${n}</span></div>
       <h3>${msg}</h3>
-      ${miss.length ? `<div class="miss-list"><p class="muted small">Các từ trả lời sai:</p>${miss.map((c) => `<div class="miss"><img src="${imgUrl(c.id)}" width="320" height="290" alt="" loading="lazy"><div><span class="zh">${esc(c.h)}</span> <span class="py">${esc(c.py)}</span><div class="small">${esc(c.vi)}${c.ex ? ` · <span class="zh">${esc(c.ex)}</span>` : ''}</div></div>${sayBtn(c.h, true)}</div>`).join('')}</div>` : ''}
+      ${miss.length ? `<div class="miss-list"><p class="muted small">Các từ trả lời sai:</p>${miss.map((c) => `<div class="miss">${c.mine ? '<span class="miss-noimg" aria-hidden="true"></span>' : `<img src="${imgUrl(c.id)}" width="320" height="290" alt="" loading="lazy">`}<div><span class="zh">${esc(c.h)}</span> <span class="py">${esc(c.py)}</span><div class="small">${esc(c.vi)}${c.ex ? ` · <span class="zh">${esc(c.ex)}</span>` : ''}</div></div>${sayBtn(c.h, true)}</div>`).join('')}</div>` : ''}
       <div class="len-pick"><span class="muted small">Số câu mỗi lượt:</span>${[10, 20, 30].map((k) => `<button type="button" class="chip" data-act="len" data-len="${k}" aria-pressed="${store.len === k}">${k}</button>`).join('')}</div>
       <div class="row center">
         ${miss.length ? `<button type="button" class="btn" data-act="retry" data-mode="${mode}">Làm lại ${miss.length} câu sai</button>` : ''}
@@ -658,6 +818,320 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
       ${list.length ? `<div class="cards-grid">${list.map((c) => `<button type="button" class="mini s-${status(c.id)}" data-act="open-card" data-id="${c.id}" title="${esc(c.vi)}"><span class="dot" aria-hidden="true"></span><img src="${imgUrl(c.id)}" width="320" height="290" alt="" loading="lazy"><span class="zh">${esc(c.h)}</span><span class="py py-opt">${esc(c.py)}</span></button>`).join('')}</div>` : '<div class="fc-empty">Không có thẻ nào trong mục này.</div>'}
       <div class="danger-zone"><button type="button" class="btn again" data-act="reset">${resetArmed ? 'Bấm lần nữa để xoá hẳn' : 'Xoá tiến độ học'}</button><span>Chỉ xoá mức nhớ các thẻ trên trình duyệt này.</span></div>`;
   }
+
+
+  /* ====================== NGHE & VIẾT ====================== */
+  function makeListenQ(c) { return { c, typed: '', result: null, how: '', spoken: false }; }
+  /** Đúng nếu gõ đúng chữ Hán, hoặc đúng pinyin (bỏ qua dấu thanh, khoảng trắng). */
+  function judgeListen(typed, c) {
+    const t = String(typed || '').trim();
+    if (!t) return { ok: false, how: '' };
+    if (hasHan(t)) return { ok: onlyHan(t) === c.h, how: 'han' };
+    const want = plainPinyin(c.py);
+    return { ok: Boolean(want) && plainPinyin(t) === want, how: 'py' };
+  }
+  function renderListenQ(q, S) {
+    const { c } = q;
+    const last = S.i === S.items.length - 1;
+    const noVoice = !canSpeak || (voicesChecked && !zhVoice);
+    const showPy = store.nv.hintPy || noVoice;
+    const showVi = store.nv.hintVi || noVoice;
+    let body = `<div class="q-word">
+        ${canSpeak ? `<button type="button" class="say big" data-say="${esc(c.h)}" aria-label="Nghe lại" title="Nghe lại">${SAY_SVG}</button>` : ''}
+        ${noVoice ? '<span class="muted small">Máy chưa có giọng đọc tiếng Trung: nhìn pinyin và nghĩa rồi gõ chữ Hán.</span>' : ''}
+        ${showPy ? `<span class="q-py py">${esc(c.py)}</span>` : ''}
+        ${showVi ? `<span class="q-vi sm">${esc(c.vi)}</span>` : ''}
+      </div>`;
+    if (!S.answered) {
+      body += `<form class="spell-form" data-form="listen" autocomplete="off">
+        <label class="sr-only" for="nvInput">Gõ chữ Hán hoặc pinyin</label>
+        <input id="nvInput" class="input big" type="text" maxlength="40" placeholder="Chữ Hán hoặc pinyin" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" value="${esc(q.typed)}">
+        <button class="btn primary" type="submit">Kiểm tra <kbd>Enter</kbd></button>
+        <button class="btn" type="button" data-act="nv-skip">Không biết</button>
+      </form>`;
+    } else {
+      const ok = q.result;
+      body += `<div class="fb ${ok ? 'ok' : 'no'}" role="status">
+        <div class="fb-title">${ok ? (q.how === 'py' ? 'Đúng pinyin!' : 'Chính xác!') : 'Chưa đúng.'} <span class="zh">${esc(c.h)}</span> <span class="py">${esc(c.py)}</span> · ${esc(c.vi)} ${sayBtn(c.h, true)}</div>
+        ${!ok && q.typed ? `<div>Bạn gõ: <b>${esc(q.typed)}</b></div>` : ''}
+        ${fbExample(c)}
+      </div>${nextBtn('nghe-viet', last)}`;
+    }
+    return body;
+  }
+  function checkListen(typed) {
+    const S = sessions['nghe-viet'];
+    if (!S || S.answered || !S.q) return;
+    S.q.typed = String(typed || '').trim().slice(0, 40);
+    const j = judgeListen(S.q.typed, S.q.c);
+    S.q.result = j.ok;
+    S.q.how = j.how;
+    record('nghe-viet', j.ok);
+    renderQuiz('nghe-viet');
+    const btn = root.querySelector('#qz-nghe-viet [data-act="next"]');
+    if (btn) btn.focus({ preventScroll: true });
+  }
+
+  /* ====================== TRA TỪ MỚI ====================== */
+  let lk = { state: 'idle', q: '', res: null, row: null, err: '', saveErr: '', exState: '', editing: false };
+  let lkSeq = 0;
+  const POS_VI = { noun: 'danh từ', verb: 'động từ', adjective: 'tính từ', adverb: 'phó từ', pronoun: 'đại từ', preposition: 'giới từ', conjunction: 'liên từ', interjection: 'thán từ', particle: 'trợ từ', numeral: 'số từ', 'measure word': 'lượng từ', classifier: 'lượng từ', abbreviation: 'viết tắt', phrase: 'cụm từ', suffix: 'hậu tố', prefix: 'tiền tố' };
+  const posVi = (p) => POS_VI[String(p || '').toLowerCase()] || String(p || '').toLowerCase() || 'khác';
+
+  async function doLookup(raw) {
+    const q = String(raw || '').trim();
+    const input = $('zLkInput');
+    if (!q) { lk = { ...lk, state: 'error', err: 'Hãy nhập chữ Hán hoặc nghĩa tiếng Việt.' }; renderLookup(); return; }
+    const seq = ++lkSeq;
+    lk = { state: 'loading', q, res: null, row: null, err: '', saveErr: '', exState: '', editing: false };
+    renderLookup();
+    let res;
+    try {
+      res = await lookupZh(q);
+    } catch (e) {
+      if (seq !== lkSeq) return;
+      lk = { ...lk, state: 'error', err: e.code ? e.message : 'Không tra được lúc này (mất mạng hoặc dịch vụ tra từ đang lỗi). Thử lại sau ít phút.' };
+      renderLookup();
+      return;
+    }
+    if (seq !== lkSeq) return;
+    const yct = byHanzi.get(res.word) || null;
+    // Từ có trong bộ YCT: dùng pinyin / nghĩa / câu ví dụ đã kiểm tra trên thẻ in.
+    if (yct) {
+      res.pinyin = yct.py || res.pinyin;
+      if (yct.vi) res.meaningVi = yct.vi;
+    }
+    res.examples = yct && yct.ex ? [{ zh: yct.ex, py: yct.exPy, vi: yct.exVi, en: yct.exEn, yct: true }] : [];
+    if (input && res.fromVi) input.value = res.word;
+    lk = { state: 'done', q, res, row: mineByWord(res.word), err: '', saveErr: '', exState: 'loading', editing: false, yct };
+    renderLookup();
+    if (store.auto) speak(res.word);
+    const saving = saveLookup(res, seq);
+    // Câu ví dụ (Tatoeba) tải sau để không chờ lâu.
+    let more = [];
+    try { more = await examplesZh(res.word, yct && yct.ex ? 2 : 3); } catch (e) { more = []; }
+    if (seq !== lkSeq) return;
+    const seen = new Set(res.examples.map((x) => x.zh));
+    res.examples = [...res.examples, ...more.filter((x) => !seen.has(x.zh))].slice(0, 3);
+    lk.exState = 'done';
+    await saving;
+    if (seq !== lkSeq) return;
+    if (lk.row && !arr(lk.row.examples).length && res.examples.length && mineState === 'ready') {
+      try { const row = await dbUpdate(lk.row.id, { examples: res.examples.map(cleanEx) }); putMine(row); lk.row = row; } catch (e) { /* để lần sau */ }
+    }
+    renderLookup();
+  }
+  const cleanEx = (x) => ({ zh: String(x.zh || '').slice(0, 120), py: String(x.py || '').slice(0, 200), vi: String(x.vi || '').slice(0, 200), en: String(x.en || '').slice(0, 200) });
+  const sensesToSave = (res) => res.senses.slice(0, 3).map((g) => ({ pos: g.pos, vi: arr(g.vi).slice(0, 4).map((x) => String(x).slice(0, 60)), en: arr(g.en).slice(0, 4).map((x) => String(x).slice(0, 60)) }));
+
+  async function saveLookup(res, seq) {
+    if (mineState !== 'ready') { lk.saveErr = mineState === 'loading' ? 'Sổ từ đang tải, chưa lưu được từ này.' : 'Chưa lưu được vào Sổ từ của tôi (xem thông báo ở trên).'; renderLookup(); return; }
+    const existing = mineByWord(res.word);
+    try {
+      let row;
+      if (existing) {
+        const patch = { lookups: (existing.lookups || 1) + 1 };
+        if (!existing.ipa && res.pinyin) patch.ipa = res.pinyin;
+        if (!existing.meaning_vi && res.meaningVi) patch.meaning_vi = res.meaningVi;
+        if (!existing.senses.length && res.senses.length) patch.senses = sensesToSave(res);
+        row = await dbUpdate(existing.id, patch);
+      } else {
+        try {
+          row = await dbInsert({ word: res.word, ipa: res.pinyin.slice(0, 200), meaning_vi: res.meaningVi.slice(0, 500), senses: sensesToSave(res), examples: res.examples.map(cleanEx) });
+        } catch (e) {
+          if (e.code !== '23505') throw e;
+          await loadMine();
+          const again = mineByWord(res.word);
+          row = again ? await dbUpdate(again.id, { lookups: (again.lookups || 1) + 1 }) : null;
+        }
+      }
+      if (row) putMine(row);
+      if (seq !== lkSeq) return;
+      lk.row = row;
+      lk.saveErr = '';
+    } catch (e) {
+      if (seq !== lkSeq) return;
+      lk.saveErr = 'Chưa lưu được vào Sổ từ của tôi: ' + dbErrText(e);
+    }
+    fcList = null;
+    renderLookup();
+    renderRecent();
+  }
+
+  function showSaved(r) {
+    lkSeq++;
+    const yct = byHanzi.get(r.word) || null;
+    lk = { state: 'done', q: r.word, res: null, row: r, err: '', saveErr: '', exState: 'done', editing: false, yct };
+    const input = $('zLkInput');
+    if (input) input.value = r.word;
+    renderLookup();
+  }
+
+  function renderLookup() {
+    const box = $('zLkResult');
+    if (!box) return;
+    $('zNote').innerHTML = mineNotice();
+    if (lk.state === 'idle') { box.innerHTML = ''; return; }
+    if (lk.state === 'loading') { box.innerHTML = `<div class="card entry loading" aria-busy="true"><div class="spinner" aria-hidden="true"></div><p>Đang tra "<b>${esc(lk.q)}</b>"...</p></div>`; return; }
+    if (lk.state === 'error') { box.innerHTML = `<div class="notice bad">${esc(lk.err)}</div>`; return; }
+    const r = lk.row;
+    const res = lk.res;
+    const word = (r && r.word) || res.word;
+    const py = (r && r.ipa) || (res && res.pinyin) || '';
+    const meaning = (r && r.meaning_vi) || (res && res.meaningVi) || '';
+    const senses = r && r.senses.length ? r.senses : res ? res.senses : [];
+    const exs = r && r.examples.length && !(res && res.examples.length > r.examples.length) ? r.examples : res ? res.examples : [];
+    const yct = lk.yct;
+    const saveLine = r
+      ? `<span class="saved">Đã lưu vào Sổ từ của tôi${r.lookups > 1 ? ` · tra ${r.lookups} lần` : ''}</span>${badge('u:' + r.id)}`
+      : lk.saveErr ? `<span class="warn-text">${esc(lk.saveErr)}</span>` : '<span class="muted small">Đang lưu vào sổ từ...</span>';
+    box.innerHTML = `<article class="card entry" aria-label="Kết quả tra ${esc(word)}">
+      ${res && res.fromVi ? `<p class="muted small">Từ tiếng Trung cho "${esc(res.query)}":</p>` : ''}
+      <header class="entry-head">
+        <span class="entry-hz">${esc(word)}</span>
+        <span class="entry-py py">${esc(py)}</span>
+        ${sayBtn(word)}
+        ${yct ? `<span class="badge s-known">Có trong YCT ${yct.lv}</span>` : ''}
+      </header>
+      <div class="meaning-box">
+        ${lk.editing
+          ? `<form class="edit-form" data-form="meaning"><label class="sr-only" for="zEdit">Nghĩa tiếng Việt</label><input id="zEdit" class="input" maxlength="200" value="${esc(meaning)}"><button class="btn primary" type="submit">Lưu nghĩa</button><button class="btn" type="button" data-act="z-edit-cancel">Huỷ</button></form>`
+          : `<div class="meaning">${meaning ? esc(meaning) : '<span class="muted">Chưa có nghĩa tiếng Việt</span>'}</div>${r ? '<button type="button" class="linkbtn small" data-act="z-edit">Sửa nghĩa</button>' : ''}`}
+      </div>
+      ${senses.length ? `<div class="senses">${senses.map((g) => `<div class="sense"><span class="pos">${esc(posVi(g.pos))}</span><div class="sense-body">${arr(g.vi).length ? `<div class="sense-vi">${esc(arr(g.vi).join(', '))}</div>` : ''}${arr(g.en).length ? `<div class="muted small en-opt">${esc(arr(g.en).join(', '))}</div>` : ''}</div></div>`).join('')}</div>` : ''}
+      ${yct ? `<div class="yct-hit">${img(yct, 'figure')}<div><b>Thẻ YCT ${yct.lv}</b><div class="small muted">Có hình minh hoạ và câu ví dụ trong bộ thẻ in.</div><button type="button" class="btn" data-act="open-card" data-id="${yct.id}">Mở thẻ YCT</button></div></div>` : ''}
+      <h4 class="sub">Câu ví dụ</h4>
+      ${exs.length ? `<div class="exs">${exs.map((x) => `<div class="ex"><div class="ex-zh"><span class="zh">${esc(x.zh)}</span>${sayBtn(x.zh, true)}</div>${x.py ? `<div class="py py-opt">${esc(x.py)}</div>` : ''}${x.vi ? `<div>${esc(x.vi)}</div>` : ''}${x.en ? `<div class="muted small en-opt">${esc(x.en)}</div>` : ''}</div>`).join('')}</div>` : ''}
+      ${lk.exState === 'loading' ? '<p class="muted small">Đang tìm câu ví dụ...</p>' : !exs.length ? '<p class="muted small">Chưa tìm được câu ví dụ cho từ này.</p>' : ''}
+      <footer class="entry-foot">
+        <div class="row">${saveLine}</div>
+        <div class="row">
+          ${r ? `<button type="button" class="btn" data-act="open-card" data-id="u:${r.id}">Ôn thẻ này</button>
+          <button type="button" class="btn ghost-bad" data-act="z-del" data-id="${r.id}">${delArmed === r.id ? 'Bấm lần nữa để xoá' : 'Xoá khỏi sổ'}</button>` : ''}
+          ${res ? '' : `<button type="button" class="btn" data-act="z-lookup" data-w="${esc(word)}">Tra lại trên mạng</button>`}
+        </div>
+      </footer>
+      <p class="src-note">Nguồn: Google Dịch (pinyin, nghĩa), Tatoeba (câu ví dụ), bộ thẻ YCT (nếu có). Nghĩa dịch tự động có thể chưa sát, hãy sửa lại cho đúng ngữ cảnh bạn học.</p>
+    </article>`;
+    if (lk.editing) { const i = $('zEdit'); if (i) { i.focus(); i.select(); } }
+  }
+
+  function renderRecent() {
+    const box = $('zRecent');
+    if (!box) return;
+    if (mineState !== 'ready' || !mine.length) { box.innerHTML = ''; return; }
+    const recent = mine.slice().sort((a, b) => String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at))).slice(0, 14);
+    box.innerHTML = `<div class="recent">
+      <div class="grid-head"><h3>Từ vừa tra</h3><button type="button" class="linkbtn" data-act="goto" data-page="so-tu">Xem cả sổ từ (${mine.length})</button></div>
+      <div class="row">${recent.map((r) => `<button type="button" class="chip word-chip s-${status('u:' + r.id)}" data-act="z-show" data-id="${r.id}" title="${esc(r.meaning_vi)}"><span class="zh">${esc(r.word)}</span></button>`).join('')}</div>
+    </div>`;
+  }
+
+  async function saveMeaning(val) {
+    const r = lk.row;
+    if (!r) return;
+    try {
+      const row = await dbUpdate(r.id, { meaning_vi: String(val || '').trim().slice(0, 200) });
+      putMine(row);
+      lk.row = row;
+      lk.editing = false;
+      toast('Đã lưu nghĩa mới.', 'ok');
+    } catch (e) {
+      toast('Chưa lưu được: ' + dbErrText(e), 'bad');
+    }
+    renderLookup();
+  }
+
+  let delArmed = null;
+  let delTimer = 0;
+  async function deleteMine(id, after) {
+    if (delArmed !== id) {
+      delArmed = id;
+      clearTimeout(delTimer);
+      delTimer = setTimeout(() => { delArmed = null; after(); }, 4000);
+      after();
+      return;
+    }
+    delArmed = null;
+    clearTimeout(delTimer);
+    const r = mineRow(id);
+    try {
+      await dbDelete(id);
+      mine = mine.filter((x) => x.id !== id);
+      mineCards.delete('u:' + id);
+      if (lk.row && lk.row.id === id) lk = { state: 'idle', q: '', res: null, row: null, err: '' };
+      fcList = null;
+      delete sessions['nghe-viet'];
+      toast(`Đã xoá "${r ? r.word : ''}" khỏi sổ từ.`, 'ok');
+    } catch (e) {
+      toast('Chưa xoá được: ' + dbErrText(e), 'bad');
+    }
+    after();
+    renderRecent();
+  }
+
+  /* ====================== SỔ TỪ CỦA TÔI ====================== */
+  let nbQuery = '';
+  let nbPage = 0;
+  const NB_PER_PAGE = 10;
+  function nbFiltered() {
+    const q = nbQuery.trim().toLowerCase();
+    const qp = plainPinyin(q);
+    let list = mine.filter((r) => {
+      if (store.nb.filter !== 'all' && status('u:' + r.id) !== store.nb.filter) return false;
+      if (!q) return true;
+      return r.word.includes(nbQuery.trim()) || (r.meaning_vi || '').toLowerCase().includes(q) || (qp && plainPinyin(r.ipa).includes(qp));
+    });
+    if (store.nb.sort === 'weak') list = list.slice().sort((a, b) => weight('u:' + b.id) - weight('u:' + a.id) || b.wrong - a.wrong);
+    else if (store.nb.sort === 'py') list = list.slice().sort((a, b) => plainPinyin(a.ipa).localeCompare(plainPinyin(b.ipa)));
+    return list;
+  }
+  function nbListHtml() {
+    if (mineState === 'loading') return '<div class="fc-empty">Đang tải Sổ từ của tôi...</div>';
+    if (!mine.length) return '<div class="fc-empty">Sổ từ đang trống. <button type="button" class="linkbtn" data-act="goto" data-page="tra-tu">Tra từ mới</button> để thêm từ.</div>';
+    const all = nbFiltered();
+    if (!all.length) return '<div class="fc-empty">Không có từ nào khớp.</div>';
+    const pages = Math.ceil(all.length / NB_PER_PAGE);
+    nbPage = Math.max(0, Math.min(nbPage, pages - 1));
+    const list = all.slice(nbPage * NB_PER_PAGE, (nbPage + 1) * NB_PER_PAGE);
+    return `<ul class="nb-list">${list.map((r) => { const st = status('u:' + r.id); return `<li class="nb-item s-${st}">
+        <button type="button" class="nb-main" data-act="z-show" data-id="${r.id}" title="Xem chi tiết">
+          <span class="nb-word zh">${esc(r.word)}</span><span class="py small">${esc(r.ipa)}</span>
+          <span class="nb-mean">${esc(r.meaning_vi)}</span>
+        </button>
+        <span class="nb-meta">${badge('u:' + r.id)}</span>
+        <span class="nb-act">${sayBtn(r.word, true)}
+          <button type="button" class="chip" data-act="open-card" data-id="u:${r.id}">Ôn</button>
+          <button type="button" class="chip bad" data-act="z-del" data-id="${r.id}">${delArmed === r.id ? 'Xoá hẳn?' : 'Xoá'}</button>
+        </span>
+      </li>`; }).join('')}</ul>
+      ${pages > 1 ? `<nav class="pager" aria-label="Chuyển trang sổ từ">
+        <button type="button" class="btn" data-act="nb-page" data-p="${nbPage - 1}"${nbPage <= 0 ? ' disabled' : ''}>‹ Trước</button>
+        <span class="pager-info">Trang <b>${nbPage + 1}</b>/${pages} · ${all.length} từ</span>
+        <button type="button" class="btn" data-act="nb-page" data-p="${nbPage + 1}"${nbPage >= pages - 1 ? ' disabled' : ''}>Sau ›</button>
+      </nav>` : ''}`;
+  }
+  function renderNotebook() {
+    const box = $('zNb');
+    const n = mine.length;
+    const known = mine.filter((r) => status('u:' + r.id) === 'known').length;
+    const learn = mine.filter((r) => status('u:' + r.id) === 'learn').length;
+    const F = [['all', 'Tất cả'], ['new', 'Chưa học'], ['learn', 'Đang học'], ['known', 'Đã thuộc']];
+    box.innerHTML = `${mineNotice()}
+      ${n ? `<div class="stats"><div class="stat"><h3>Sổ từ của tôi <span>${known}/${n} đã thuộc</span></h3>
+        <div class="stack" role="img" aria-label="Đã thuộc ${known}, đang học ${learn}, chưa học ${n - known - learn}"><i class="k" style="width:${(known / n) * 100}%"></i><i class="l" style="width:${(learn / n) * 100}%"></i></div>
+        <p class="muted small">Đang học ${learn} · Chưa học ${n - known - learn}</p></div></div>
+      <div class="row"><button type="button" class="btn primary" data-act="mine-review">Ôn sổ từ bằng thẻ</button><button type="button" class="btn" data-act="mine-listen">Nghe &amp; viết các từ này</button></div>` : ''}
+      <div class="nb-tools">
+        <label class="sr-only" for="zNbSearch">Tìm trong sổ từ</label>
+        <input id="zNbSearch" class="input" type="search" placeholder="Tìm chữ Hán, pinyin hoặc nghĩa..." value="${esc(nbQuery)}" autocapitalize="off" spellcheck="false">
+        <label class="sr-only" for="zNbSort">Sắp xếp</label>
+        <select id="zNbSort" class="input select"><option value="new"${store.nb.sort === 'new' ? ' selected' : ''}>Mới tra trước</option><option value="py"${store.nb.sort === 'py' ? ' selected' : ''}>Theo pinyin A-Z</option><option value="weak"${store.nb.sort === 'weak' ? ' selected' : ''}>Cần ôn trước</option></select>
+      </div>
+      <div class="row">${F.map(([k, t]) => `<button type="button" class="chip" data-act="nb-filter" data-f="${k}" aria-pressed="${store.nb.filter === k}">${t}</button>`).join('')}</div>
+      <div id="zNbList">${nbListHtml()}</div>`;
+  }
+  function refreshNbList() { const el = $('zNbList'); if (el) el.innerHTML = nbListHtml(); }
 
   /* ====================== SỰ KIỆN ====================== */
   function resetAllSessions() {
@@ -718,11 +1192,38 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
       case 'check': buildCheck(); break;
       case 'pfilter': progFilter = b.dataset.f; renderProgress(); break;
       case 'open-card': {
+        const id = b.dataset.id;
+        if (id.startsWith('u:')) { if (store.fc.src === 'yct') store.fc.src = 'mine'; }
+        else {
+          if (store.fc.src === 'mine') store.fc.src = 'yct';
+          const c = byId[id];
+          if (c && !store.levels.includes(c.lv)) { store.levels = [...store.levels, c.lv].sort(); syncToolbar(); resetAllSessions(); }
+        }
         store.fc.only = false; store.fc.shuffle = false; fcList = null; buildFcList();
         store.fc.i = Math.max(0, fcList.indexOf(b.dataset.id)); fcBack = false;
         showPage('lat-the', { scroll: true });
         break;
       }
+      case 'fc-src': store.fc.src = b.dataset.src; store.fc.i = 0; fcList = null; fcBack = false; save(); renderFc(); break;
+      case 'nv-src': store.nv.src = b.dataset.src; save(); delete sessions['nghe-viet']; renderQuiz('nghe-viet'); break;
+      case 'nv-hint': {
+        store.nv[b.dataset.h] = !store.nv[b.dataset.h]; save();
+        const S = sessions['nghe-viet']; const i = $('nvInput'); if (S && S.q && i) S.q.typed = i.value;
+        renderQuiz('nghe-viet');
+        break;
+      }
+      case 'nv-skip': checkListen(''); break;
+      case 'goto': showPage(b.dataset.page, { scroll: true }); if (b.dataset.page === 'tra-tu') { const i = $('zLkInput'); if (i) i.focus(); } break;
+      case 'mine-reload': reloadMine(); break;
+      case 'z-lookup': showPage('tra-tu'); { const i = $('zLkInput'); if (i) i.value = b.dataset.w; } doLookup(b.dataset.w); break;
+      case 'z-show': { const r = mineRow(b.dataset.id); if (r) { showPage('tra-tu', { scroll: true }); showSaved(r); } break; }
+      case 'z-edit': lk.editing = true; renderLookup(); break;
+      case 'z-edit-cancel': lk.editing = false; renderLookup(); break;
+      case 'z-del': deleteMine(b.dataset.id, () => { if (store.page === 'so-tu') renderNotebook(); else renderLookup(); }); break;
+      case 'nb-filter': store.nb.filter = b.dataset.f; nbPage = 0; save(); renderNotebook(); break;
+      case 'nb-page': nbPage = +b.dataset.p; refreshNbList(); scrollIntoViewIfAbove($('zNbList')); break;
+      case 'mine-review': store.fc.src = 'mine'; store.fc.i = 0; store.fc.only = false; fcList = null; fcBack = false; save(); showPage('lat-the', { scroll: true }); break;
+      case 'mine-listen': store.nv.src = 'mine'; save(); delete sessions['nghe-viet']; showPage('nghe-viet', { scroll: true }); break;
       case 'reset':
         if (resetArmed && Date.now() - resetArmed < 5000) {
           store.st = {}; resetArmed = 0; save(); resetAllSessions(); renderProgress();
@@ -735,11 +1236,38 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     }
   });
 
+  yc.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target;
+    if (f.id === 'zLkForm') doLookup($('zLkInput').value);
+    else if (f.dataset.form === 'meaning') saveMeaning($('zEdit').value);
+    else if (f.dataset.form === 'listen') checkListen($('nvInput').value);
+  });
+  yc.addEventListener('input', (e) => {
+    if (e.target.id === 'zNbSearch') { nbQuery = e.target.value; nbPage = 0; refreshNbList(); }
+    else if (e.target.id === 'nvInput') { const S = sessions['nghe-viet']; if (S && S.q) S.q.typed = e.target.value; }
+  });
+  yc.addEventListener('change', (e) => {
+    if (e.target.id === 'zNbSort') { store.nb.sort = e.target.value; nbPage = 0; save(); refreshNbList(); }
+  });
+  yc.addEventListener('keydown', (e) => {
+    if (e.target.id === 'zEdit' && e.key === 'Escape') { lk.editing = false; renderLookup(); }
+  });
+
+  async function reloadMine() {
+    await loadMine();
+    fcList = null;
+    delete sessions['nghe-viet'];
+    if (lk.row) lk.row = mineRow(lk.row.id);
+    if (['tra-tu', 'so-tu', 'lat-the', 'nghe-viet'].includes(store.page) && !(store.page === 'nghe-viet' && store.nv.src === 'yct') && !(store.page === 'lat-the' && store.fc.src === 'yct')) rerender();
+  }
+
   /** Phím tắt: chỉ khi mục đang hiện và không gõ trong ô nhập. */
   function onKey(e) {
     if (!host.isConnected || host.offsetParent === null) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.composedPath ? e.composedPath()[0] : e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return; // đang gõ (Tra từ, Nghe & viết, tìm kiếm)
     const inside = Boolean(t && t.getRootNode && t.getRootNode() === root);
     const inNav = Boolean(t && nav.contains(t));
     const neutral = !t || t === document.body || t === document.documentElement || t === host;
@@ -762,6 +1290,7 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
     if (!MODES[page]) return;
     const S = sessions[page];
     if (!S || !S.items.length) return;
+    if (page === 'nghe-viet' && !(S.answered || S.i >= S.items.length)) return; // chờ gõ đáp án
     if (e.key === 'Enter') {
       if (isBtn && !(inside && ['next', 'check', 'restart'].includes(t.dataset.act))) return;
       e.preventDefault();
@@ -783,5 +1312,6 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
 
   syncToolbar();
   showPage(store.page);
+  reloadMine();
   return { showPage, onKey };
 }

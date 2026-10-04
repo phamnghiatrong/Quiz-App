@@ -23,7 +23,7 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `public/2.png` | Ảnh chữ thương hiệu trên header |
 | `package.json` | Khai báo project tĩnh, không có dependency |
 | `tenses/` | Mục "12 thì tiếng Anh" (nạp lười, vẽ trong Shadow DOM) |
-| `chinese/` | Mục "Tiếng Trung YCT": `chinese.js` (logic), `chinese-data.js` (301 thẻ), `chinese.css`, `img/*.webp` (hình thẻ) |
+| `chinese/` | Mục "Tiếng Trung YCT": `chinese.js` (logic, gồm Tra từ mới / Nghe & viết / Sổ từ của tôi), `chinese-api.js` (tra từ: Google Dịch, Tatoeba), `chinese-data.js` (301 thẻ), `chinese.css`, `img/*.webp` (hình thẻ). Sổ từ lưu ở bảng `vocab_words` với `lang = 'zh'` |
 | `vocab/` | Mục "Từ vựng tiếng Anh": `vocab.js` (giao diện, sổ từ, ôn tập, đặt câu), `vocab-api.js` (tra từ: Wiktionary, Google Dịch, MyMemory, Datamuse; soát câu: LanguageTool), `vocab.css`, `vocab-schema.sql` (bảng `vocab_words`) |
 
 ## Cài đặt

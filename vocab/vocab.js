@@ -77,14 +77,13 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
   const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
 
   /* ---------------- tuỳ chọn (localStorage, theo tài khoản) ---------------- */
-  let store = { page: 'tra-tu', accent: 'us', auto: false, front: 'en', len: 10, sort: 'new', filter: 'all', scId: null, fc: { i: 0, only: false, shuffle: false }, nvHint: true };
+  let store = { page: 'tra-tu', auto: false, front: 'en', len: 10, sort: 'new', filter: 'all', scId: null, fc: { i: 0, only: false, shuffle: false }, nvHint: true };
   try {
     const raw = localStorage.getItem(key);
     if (raw) store = Object.assign(store, JSON.parse(raw));
   } catch (e) { /* dữ liệu hỏng thì bỏ qua */ }
   store.fc = Object.assign({ i: 0, only: false, shuffle: false }, store.fc || {});
   if (![10, 20, 30].includes(store.len)) store.len = 10;
-  if (!['us', 'uk'].includes(store.accent)) store.accent = 'us';
   if (!['en', 'vi'].includes(store.front)) store.front = 'en';
   function save() {
     try { localStorage.setItem(key, JSON.stringify(store)); } catch (e) { /* hết chỗ / chế độ riêng tư */ }
@@ -98,34 +97,34 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
 
   /* ---------------- phát âm (giọng đọc có sẵn của trình duyệt) ---------------- */
   const canSpeak = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
-  const voices = { us: null, uk: null };
+  // Chỉ dùng một giọng tiếng Anh (ưu tiên Anh-Mỹ): đa số máy Windows chỉ cài
+  // sẵn giọng en-US nên nút giọng Anh-Anh đã bỏ (vẫn hiện phiên âm UK/US).
+  let enVoice = null;
   function pickVoices() {
     if (!canSpeak) return;
     const vs = speechSynthesis.getVoices();
     if (!vs.length) return;
     const pick = (re) => vs.find((v) => re.test(v.lang) && /natural|online|google/i.test(v.name)) || vs.find((v) => re.test(v.lang)) || null;
-    voices.us = pick(/^en[-_]US/i) || pick(/^en/i);
-    voices.uk = pick(/^en[-_]GB/i) || voices.us;
+    enVoice = pick(/^en[-_]US/i) || pick(/^en/i);
   }
   if (canSpeak) {
     pickVoices();
     try { speechSynthesis.addEventListener('voiceschanged', pickVoices); } catch (e) { /* trình duyệt cũ */ }
   }
-  function speak(text, acc = store.accent, rate = 0.9) {
+  function speak(text, rate = 0.9) {
     if (!canSpeak || !text) return;
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(String(text));
-      u.lang = acc === 'uk' ? 'en-GB' : 'en-US';
+      u.lang = 'en-US';
       u.rate = rate;
-      const v = voices[acc];
-      if (v) u.voice = v;
+      if (enVoice) u.voice = enVoice;
       speechSynthesis.speak(u);
     } catch (e) { /* bỏ qua */ }
   }
   const SAY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
-  const sayBtn = (t, { sm = false, acc = '', label = 'Nghe phát âm' } = {}) =>
-    `<button class="say${sm ? ' sm' : ''}" type="button" data-say="${esc(t)}"${acc ? ` data-acc="${acc}"` : ''} aria-label="${esc(label)}" title="${esc(label)}">${SAY_SVG}</button>`;
+  const sayBtn = (t, { sm = false, label = 'Nghe phát âm' } = {}) =>
+    `<button class="say${sm ? ' sm' : ''}" type="button" data-say="${esc(t)}" aria-label="${esc(label)}" title="${esc(label)}">${SAY_SVG}</button>`;
 
   /* ---------------- dữ liệu sổ từ ---------------- */
   let words = []; // các dòng của bảng vocab_words, mới nhất trước
@@ -136,17 +135,27 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
 
   function isMissingTable(err) {
     const m = String((err && (err.message || err.details || err.hint)) || '');
-    return Boolean(err) && (err.code === '42P01' || err.code === 'PGRST205' || err.code === 'PGRST202' || /vocab_words/.test(m) && /(does not exist|could not find|schema cache)/i.test(m));
+    return Boolean(err) && (err.code === '42P01' || err.code === 'PGRST205' || err.code === 'PGRST202' || /vocab_words/.test(m) && !/column/i.test(m) && /(does not exist|could not find|schema cache)/i.test(m));
   }
   function dbFail(err) {
     if (isMissingTable(err)) { dbState = 'missing'; return 'Chưa tạo bảng vocab_words trên Supabase.'; }
     const m = String((err && err.message) || err || 'Lỗi không rõ');
     return /fetch|network/i.test(m) ? 'Mất kết nối mạng, chưa lưu được.' : m;
   }
+  // Bảng dùng chung với sổ từ tiếng Trung (cột lang = 'en' | 'zh'). Bảng tạo
+  // bằng bản SQL đầu tiên chưa có cột lang: vẫn chạy được (legacyNoLang) cho
+  // tới khi chạy lại vocab-schema.sql.
+  let legacyNoLang = false;
+  const isNoLangColumn = (err) => Boolean(err) && (err.code === '42703' || err.code === 'PGRST204') && /lang/.test(String(err.message || ''));
   async function loadWords() {
     if (!supabase) { dbState = 'nodb'; return; }
     dbState = 'loading';
-    const { data, error } = await supabase.from(TABLE).select('*').order('created_at', { ascending: false }).limit(3000);
+    let res = await supabase.from(TABLE).select('*').eq('lang', 'en').order('created_at', { ascending: false }).limit(3000);
+    if (res.error && isNoLangColumn(res.error)) {
+      legacyNoLang = true;
+      res = await supabase.from(TABLE).select('*').order('created_at', { ascending: false }).limit(3000);
+    }
+    const { data, error } = res;
     if (error) {
       dbError = dbFail(error);
       if (dbState !== 'missing') dbState = 'error';
@@ -160,7 +169,7 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
     return { ...r, senses: arr(r.senses), examples: arr(r.examples), sentences: arr(r.sentences), level: r.level || 0, correct: r.correct || 0, wrong: r.wrong || 0 };
   }
   async function dbInsert(row) {
-    const { data, error } = await supabase.from(TABLE).insert(row).select().single();
+    const { data, error } = await supabase.from(TABLE).insert(legacyNoLang ? row : { ...row, lang: 'en' }).select().single();
     if (error) throw error;
     return normRow(data);
   }
@@ -228,10 +237,7 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
   <div class="toolbar">
     <div class="tb-group" id="tbStats" aria-live="polite"></div>
     <div class="tb-group" role="group" aria-label="Tuỳ chọn phát âm">
-      ${canSpeak ? `<span class="tb-label">Giọng đọc</span>
-      <button type="button" class="chip" data-act="accent" data-acc="us" aria-pressed="false">Anh-Mỹ</button>
-      <button type="button" class="chip" data-act="accent" data-acc="uk" aria-pressed="false">Anh-Anh</button>
-      <button type="button" class="chip toggle" data-act="opt" data-opt="auto" aria-pressed="false" title="Tự đọc to từ khi hiện thẻ / câu hỏi">Tự phát âm</button>` : '<span class="muted small">Trình duyệt này không hỗ trợ đọc to.</span>'}
+      ${canSpeak ? `<button type="button" class="chip toggle" data-act="opt" data-opt="auto" aria-pressed="false" title="Tự đọc to từ khi hiện thẻ / câu hỏi">Tự phát âm</button>` : '<span class="muted small">Trình duyệt này không hỗ trợ đọc to.</span>'}
     </div>
   </div>
   <div id="dbNote"></div>
@@ -287,7 +293,6 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
   }
 
   function syncToolbar() {
-    root.querySelectorAll('[data-act="accent"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.acc === store.accent)));
     root.querySelectorAll('[data-act="opt"]').forEach((b) => b.setAttribute('aria-pressed', store[b.dataset.opt] ? 'true' : 'false'));
     const known = words.filter((w) => status(w) === 'known').length;
     $('tbStats').innerHTML = dbState === 'ready'
@@ -464,18 +469,17 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
     };
   }
 
+  /** Phiên âm: hiện cả UK và US nếu khác nhau, chỉ một nút nghe (giọng Anh-Mỹ). */
   function ipaLine(v) {
     const o = v.ipaObj;
-    if (o && o.uk && o.us && o.uk !== o.us) {
-      return `<span class="ipa-item"><span class="acc">UK</span><span class="ipa">${esc(o.uk)}</span>${sayBtn(v.word, { sm: true, acc: 'uk', label: 'Nghe giọng Anh-Anh' })}</span>
-        <span class="ipa-item"><span class="acc">US</span><span class="ipa">${esc(o.us)}</span>${sayBtn(v.word, { sm: true, acc: 'us', label: 'Nghe giọng Anh-Mỹ' })}</span>`;
-    }
-    if (!o && /^UK .+ · US /.test(v.ipa)) {
-      const [uk, us] = v.ipa.replace(/^UK /, '').split(' · US ');
-      return `<span class="ipa-item"><span class="acc">UK</span><span class="ipa">${esc(uk)}</span>${sayBtn(v.word, { sm: true, acc: 'uk', label: 'Nghe giọng Anh-Anh' })}</span>
-        <span class="ipa-item"><span class="acc">US</span><span class="ipa">${esc(us)}</span>${sayBtn(v.word, { sm: true, acc: 'us', label: 'Nghe giọng Anh-Mỹ' })}</span>`;
-    }
-    return `<span class="ipa-item">${v.ipa ? `<span class="ipa">${esc(v.ipa)}</span>` : '<span class="muted small">Chưa có phiên âm</span>'}${sayBtn(v.word, { sm: true })}</span>`;
+    let uk = '';
+    let us = '';
+    if (o && o.uk && o.us && o.uk !== o.us) { uk = o.uk; us = o.us; }
+    else if (!o && /^UK .+ · US /.test(v.ipa)) [uk, us] = v.ipa.replace(/^UK /, '').split(' · US ');
+    const ipaHtml = uk
+      ? `<span class="ipa-item"><span class="acc">UK</span><span class="ipa">${esc(uk)}</span></span><span class="ipa-item"><span class="acc">US</span><span class="ipa">${esc(us)}</span></span>`
+      : v.ipa ? `<span class="ipa-item"><span class="ipa">${esc(v.ipa)}</span></span>` : '<span class="muted small">Chưa có phiên âm</span>';
+    return ipaHtml + sayBtn(v.word, { sm: true });
   }
 
   function sensesHtml(senses, { full = true } = {}) {
@@ -722,7 +726,7 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
     if (mode === 'nghe-viet' && !S.answered) {
       const inp = $('nvInput');
       if (inp) inp.focus({ preventScroll: true });
-      if (!S.q.spoken) { S.q.spoken = true; speak(S.q.w.word, store.accent, 0.85); }
+      if (!S.q.spoken) { S.q.spoken = true; speak(S.q.w.word, 0.85); }
     } else if (mode === 'chon-nghia' && store.auto && !S.answered && S.q.type === 'en2vi') speak(S.q.w.word);
   }
   function nextQ(mode) {
@@ -874,7 +878,6 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
     const box = $('sc');
     if (!words.length) { box.innerHTML = emptyBook(1); return; }
     const w = scWord();
-    const opts = words.slice().sort((a, b) => a.word.localeCompare(b.word)).map((x) => `<option value="${x.id}"${x.id === w.id ? ' selected' : ''}>${esc(x.word)}${x.sentences.length ? ` (${x.sentences.length} câu)` : ''}</option>`).join('');
     const R = sc.result;
     let resHtml = '';
     if (sc.state === 'checking') resHtml = '<div class="card sc-res loading" aria-busy="true"><div class="spinner" aria-hidden="true"></div><p>Đang kiểm tra câu...</p></div>';
@@ -902,10 +905,16 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
     }
     const exs = w.examples.slice(0, 2);
     box.innerHTML = `<div class="sc-wrap">
-      <div class="sc-pick row">
-        <label for="scSelect" class="tb-label">Từ cần đặt câu</label>
-        <select id="scSelect" class="input select">${opts}</select>
-        <button type="button" class="btn" data-act="sc-random">Từ ngẫu nhiên</button>
+      <div class="sc-pick">
+        <label for="scFind" class="sc-label">Chọn từ để đặt câu</label>
+        <div class="sc-find-row">
+          <div class="combo">
+            <input id="scFind" class="input" type="search" placeholder="Gõ để tìm trong ${words.length} từ của sổ (tiếng Anh hoặc nghĩa)..." autocomplete="off" autocapitalize="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="scList" aria-autocomplete="list">
+            <div id="scList" class="combo-list" role="listbox" aria-label="Từ tìm được" hidden></div>
+          </div>
+          <button type="button" class="btn" data-act="sc-random">Từ ngẫu nhiên</button>
+          <button type="button" class="btn" data-act="sc-nosent" title="Chọn ngẫu nhiên một từ chưa đặt câu nào">Từ chưa có câu</button>
+        </div>
       </div>
       <div class="card sc-word">
         <div class="entry-head"><h3 class="word">${esc(w.word)}</h3><div class="ipa-line"><span class="ipa-item">${w.ipa ? `<span class="ipa">${esc(w.ipa)}</span>` : ''}${sayBtn(w.word, { sm: true })}</span></div>${badge(w)}</div>
@@ -924,6 +933,41 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
       <p class="src-note">Câu được soát bằng LanguageTool (lỗi ngữ pháp, chính tả phổ biến) và dịch bằng Google Dịch. Công cụ tự động không đánh giá được câu có tự nhiên hay dùng từ đúng ngữ cảnh hay không, nên hãy đọc kỹ phần nghĩa tiếng Việt và câu mẫu.</p>
     </div>`;
   }
+  /** Tìm từ trong sổ cho ô chọn từ: khớp đầu từ trước, rồi chứa trong từ, rồi trong nghĩa. */
+  function findWords(q, limit = 8) {
+    const k = q.trim().toLowerCase();
+    if (!k) return words.slice().sort((a, b) => a.sentences.length - b.sentences.length).slice(0, limit);
+    const starts = [];
+    const inWord = [];
+    const inMean = [];
+    for (const w of words) {
+      const x = w.word.toLowerCase();
+      if (x.startsWith(k)) starts.push(w);
+      else if (x.includes(k)) inWord.push(w);
+      else if ((w.meaning_vi || '').toLowerCase().includes(k)) inMean.push(w);
+    }
+    starts.sort((a, b) => a.word.length - b.word.length || a.word.localeCompare(b.word));
+    return [...starts, ...inWord, ...inMean].slice(0, limit);
+  }
+  let scMatches = [];
+  function renderCombo(q) {
+    const list = $('scList');
+    const inp = $('scFind');
+    if (!list || !inp) return;
+    scMatches = findWords(q);
+    list.innerHTML = scMatches.length
+      ? scMatches.map((w, k) => `<button type="button" class="combo-item" role="option" id="scOpt${k}" data-act="sc-pick" data-id="${w.id}"><b>${esc(w.word)}</b><span class="muted small">${esc(meaningOf(w))}${w.sentences.length ? ` · ${w.sentences.length} câu` : ''}</span></button>`).join('')
+      : '<p class="combo-empty muted small">Không có từ nào khớp. Hãy tra từ mới trước.</p>';
+    list.hidden = false;
+    inp.setAttribute('aria-expanded', 'true');
+  }
+  function closeCombo() {
+    const list = $('scList');
+    const inp = $('scFind');
+    if (list) list.hidden = true;
+    if (inp) inp.setAttribute('aria-expanded', 'false');
+  }
+
   function markIssues(text, issues) {
     let out = '';
     let pos = 0;
@@ -999,6 +1043,8 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
 
   /* ====================== 6. SỔ TỪ ====================== */
   let nbQuery = '';
+  let nbPage = 0;
+  const NB_PER_PAGE = 10;
   let resetArmed = 0;
   function renderNotebook() {
     const box = $('nb');
@@ -1033,9 +1079,23 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
       <div id="nbList">${nbListHtml(list)}</div>
       ${n ? `<div class="danger-zone"><button type="button" class="btn again" data-act="reset">${resetArmed ? 'Bấm lần nữa để đặt lại' : 'Đặt lại tiến độ ôn'}</button><span>Đưa mọi từ về "chưa ôn", không xoá từ và câu đã đặt.</span></div>` : ''}`;
   }
-  function nbListHtml(list) {
+  /** Chỉ vẽ 10 từ mỗi trang để sổ nhiều từ (tối đa 3000) vẫn nhẹ. */
+  function pagerHtml(total, page) {
+    const pages = Math.ceil(total / NB_PER_PAGE);
+    if (pages <= 1) return '';
+    return `<nav class="pager" aria-label="Chuyển trang sổ từ">
+      <button type="button" class="btn" data-act="nb-page" data-p="${page - 1}"${page <= 0 ? ' disabled' : ''} aria-label="Trang trước">‹ Trước</button>
+      <span class="pager-info">Trang <b>${page + 1}</b>/${pages} · ${total} từ</span>
+      <button type="button" class="btn" data-act="nb-page" data-p="${page + 1}"${page >= pages - 1 ? ' disabled' : ''} aria-label="Trang sau">Sau ›</button>
+    </nav>`;
+  }
+  function nbListHtml(all) {
     if (!words.length) return emptyBook(1);
-    if (!list.length) return '<div class="fc-empty">Không có từ nào khớp.</div>';
+    if (!all.length) return '<div class="fc-empty">Không có từ nào khớp.</div>';
+    const pages = Math.ceil(all.length / NB_PER_PAGE);
+    if (nbPage >= pages) nbPage = pages - 1;
+    if (nbPage < 0) nbPage = 0;
+    const list = all.slice(nbPage * NB_PER_PAGE, (nbPage + 1) * NB_PER_PAGE);
     return `<ul class="nb-list">${list.map((w) => `<li class="nb-item s-${status(w)}">
         <button type="button" class="nb-main" data-act="show-saved" data-id="${w.id}" title="Xem chi tiết">
           <span class="nb-word">${esc(w.word)}</span>
@@ -1049,7 +1109,7 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
           <button type="button" class="chip" data-act="to-sentence" data-id="${w.id}">Đặt câu</button>
           <button type="button" class="chip bad" data-act="del" data-id="${w.id}">${delArmed === w.id ? 'Xoá hẳn?' : 'Xoá'}</button>
         </span>
-      </li>`).join('')}</ul>`;
+      </li>`).join('')}</ul>${pagerHtml(all.length, nbPage)}`;
   }
   function refreshNbList() {
     const q = nbQuery.trim().toLowerCase();
@@ -1068,7 +1128,9 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
     }
     resetArmed = 0;
     try {
-      const { error } = await supabase.from(TABLE).update({ level: 0, correct: 0, wrong: 0, last_review: null }).not('id', 'is', null);
+      let q = supabase.from(TABLE).update({ level: 0, correct: 0, wrong: 0, last_review: null });
+      q = legacyNoLang ? q.not('id', 'is', null) : q.eq('lang', 'en');
+      const { error } = await q;
       if (error) throw error;
       words.forEach((w) => { w.level = 0; w.correct = 0; w.wrong = 0; w.last_review = null; });
       Object.keys(sessions).forEach((k) => delete sessions[k]);
@@ -1086,12 +1148,11 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
 
   vb.addEventListener('click', (e) => {
     const say = e.target.closest('[data-say]');
-    if (say) { e.stopPropagation(); speak(say.dataset.say, say.dataset.acc || store.accent, say.dataset.rate ? +say.dataset.rate : 0.9); return; }
+    if (say) { e.stopPropagation(); speak(say.dataset.say, say.dataset.rate ? +say.dataset.rate : 0.9); return; }
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const act = b.dataset.act;
     switch (act) {
-      case 'accent': store.accent = b.dataset.acc; save(); syncToolbar(); break;
       case 'opt': store[b.dataset.opt] = !store[b.dataset.opt]; save(); syncToolbar(); break;
       case 'reload': reload(); break;
       case 'goto': showPage(b.dataset.page, { scroll: true }); if (b.dataset.page === 'tra-tu') { const i = $('lkInput'); if (i) i.focus(); } break;
@@ -1132,13 +1193,20 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
         root.querySelectorAll('[data-act="len"]').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.len === store.len)));
         break;
       case 'nv-hint': store.nvHint = !store.nvHint; save(); { const S = sessions['nghe-viet']; if (S && S.q) { const i = $('nvInput'); if (i) S.q.typed = i.value; } } renderQuiz('nghe-viet'); break;
-      case 'say-slow': speak(b.dataset.w, store.accent, 0.55); break;
+      case 'say-slow': speak(b.dataset.w, 0.55); break;
       case 'spell-skip': checkSpell(''); break;
       case 'sc-random': {
         const others = words.filter((w) => w.id !== store.scId);
         if (others.length) selectScWord(shuffle(others)[0].id);
         break;
       }
+      case 'sc-nosent': {
+        const none = words.filter((w) => !w.sentences.length && w.id !== store.scId);
+        if (none.length) selectScWord(shuffle(none)[0].id);
+        else toast('Từ nào trong sổ cũng đã có câu rồi.', 'ok');
+        break;
+      }
+      case 'sc-pick': selectScWord(b.dataset.id); { const t = $('scText'); if (t) t.focus({ preventScroll: true }); } break;
       case 'apply-fix': {
         const R = sc.result;
         const m = R && R.issues[+b.dataset.k];
@@ -1151,11 +1219,15 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
       }
       case 'sc-save': saveSentence(); break;
       case 'sc-del': deleteSentence(+b.dataset.k); break;
-      case 'nfilter': store.filter = b.dataset.f; save(); renderNotebook(); break;
+      case 'nfilter': store.filter = b.dataset.f; nbPage = 0; save(); renderNotebook(); break;
+      case 'nb-page': nbPage = +b.dataset.p; refreshNbList(); scrollIntoViewIfAbove($('nbList')); break;
       case 'reset': resetProgress(); break;
       default: break;
     }
   });
+
+  vb.addEventListener('focusin', (e) => { if (e.target.id === 'scFind') renderCombo(e.target.value); });
+  vb.addEventListener('pointerdown', (e) => { if (!e.target.closest('.combo')) closeCombo(); });
 
   vb.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1167,18 +1239,29 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
     else if (kind === 'sentence') checkSentence($('scText').value);
   });
   vb.addEventListener('change', (e) => {
-    if (e.target.id === 'scSelect') selectScWord(e.target.value);
-    else if (e.target.id === 'nbSort') { store.sort = e.target.value; save(); refreshNbList(); }
+    if (e.target.id === 'nbSort') { store.sort = e.target.value; nbPage = 0; save(); refreshNbList(); }
   });
   vb.addEventListener('input', (e) => {
-    if (e.target.id === 'nbSearch') { nbQuery = e.target.value; refreshNbList(); }
+    if (e.target.id === 'nbSearch') { nbQuery = e.target.value; nbPage = 0; refreshNbList(); }
+    else if (e.target.id === 'scFind') { renderCombo(e.target.value); }
     else if (e.target.id === 'scText') { sc.text = e.target.value; }
     else if (e.target.id === 'nvInput') { const S = sessions['nghe-viet']; if (S && S.q) S.q.typed = e.target.value; }
   });
   vb.addEventListener('keydown', (e) => {
     if (e.target.id === 'scText' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); checkSentence(e.target.value); }
-    if (e.target.id === 'nvInput' && e.key === ' ' && e.ctrlKey) { e.preventDefault(); const S = sessions['nghe-viet']; if (S && S.q) speak(S.q.w.word, store.accent, 0.85); }
+    if (e.target.id === 'nvInput' && e.key === ' ' && e.ctrlKey) { e.preventDefault(); const S = sessions['nghe-viet']; if (S && S.q) speak(S.q.w.word, 0.85); }
     if (e.target.id === 'mEdit' && e.key === 'Escape') { lk.editing = false; renderLookup(); }
+    if (e.target.id === 'scFind') {
+      if (e.key === 'Enter') { e.preventDefault(); if (scMatches[0]) { selectScWord(scMatches[0].id); const t = $('scText'); if (t) t.focus({ preventScroll: true }); } }
+      else if (e.key === 'Escape') closeCombo();
+      else if (e.key === 'ArrowDown') { e.preventDefault(); const f = $('scOpt0'); if (f) f.focus(); }
+    }
+    if (e.target.classList && e.target.classList.contains('combo-item') && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      const k = +e.target.id.replace('scOpt', '') + (e.key === 'ArrowDown' ? 1 : -1);
+      const n = $('scOpt' + k);
+      if (n) n.focus(); else if (k < 0) $('scFind').focus();
+    }
   });
 
   /** Phím tắt: chỉ khi mục đang hiện và không gõ trong ô nhập. */

@@ -312,6 +312,110 @@ button, input, select { font: inherit; color: inherit; }
   .miss img { width: 44px; }
 }
 
+/* ===================================================================== */
+/* Tra từ mới / Nghe & viết / Sổ từ của tôi (04/10/2026)                 */
+/* Cùng kiểu với mục Từ vựng tiếng Anh (vocab/vocab.css).                */
+/* ===================================================================== */
+textarea { font: inherit; color: inherit; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+code { font: 13px/1.4 ui-monospace, Consolas, monospace; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
+.warn-text { color: var(--warn); }
+.input {
+  width: 100%; min-height: 46px; padding: 10px 14px; border-radius: var(--r-md); border: 1.5px solid var(--line-strong);
+  background: #fff; font-size: 16px; color: var(--ink); line-height: 1.4; transition: border-color .15s, box-shadow .15s;
+}
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139, 92, 246, .18); }
+.select { width: auto; max-width: 100%; cursor: pointer; }
+.input.big { font-size: 24px; font-weight: 600; text-align: center; font-family: var(--hz-sans); }
+.card { border: 1px solid var(--line); border-radius: 20px; background: var(--surface); padding: 18px 20px; display: grid; gap: 12px; box-shadow: var(--shadow-soft); min-width: 0; }
+.notice { padding: 12px 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-3); font-size: 14.5px; }
+.notice.warn { border-color: rgba(180, 83, 9, .3); background: #fffbeb; color: #78350f; }
+.notice.bad { border-color: rgba(220, 38, 38, .3); background: #fff7f7; color: #991b1b; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(92vw, 520px); padding: 10px 16px; border-radius: 12px; background: #1e293b; color: #fff; font-size: 14.5px; box-shadow: 0 10px 30px rgba(15, 23, 42, .25); }
+.toast.ok { background: #166534; }
+.toast.bad { background: #991b1b; }
+.spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--accent-soft); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading { display: flex; align-items: center; gap: 12px; }
+.btn.ghost-bad { color: var(--bad); }
+.chip.bad { color: var(--bad); }
+
+.lk-form { display: grid; grid-template-columns: 1fr auto; gap: 10px; max-width: 720px; }
+.lk-form .input { font-size: 18px; min-height: 50px; }
+.lk-form .btn { min-height: 50px; padding-inline: 22px; }
+.entry { gap: 14px; }
+.entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.entry-hz { font-family: var(--hz-kai); font-size: clamp(40px, 8vw, 56px); line-height: 1.1; color: #3b2a8f; font-weight: 600; }
+.entry-py { font-size: 22px; }
+.meaning-box { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.meaning { font-size: 22px; font-weight: 700; line-height: 1.35; }
+.edit-form { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.edit-form .input { flex: 1 1 240px; }
+.senses { display: grid; gap: 10px; }
+.sense { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: start; }
+.pos { justify-self: start; font-size: 12.5px; font-weight: 700; color: var(--accent-2); background: var(--accent-soft); padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.sense-body { display: grid; gap: 2px; min-width: 0; }
+.sense-vi { font-weight: 600; }
+.sub { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.exs { display: grid; gap: 12px; }
+.ex { display: grid; gap: 2px; padding-left: 12px; border-left: 3px solid var(--accent-soft); }
+.ex-zh { display: flex; align-items: center; gap: 8px; }
+.ex-zh .zh { font-size: 21px; color: #3b2a8f; }
+.yct-hit { display: grid; grid-template-columns: 110px 1fr; gap: 14px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-3); }
+.yct-hit .pic img { max-width: 110px; }
+.yct-hit .btn { margin-top: 6px; min-height: 38px; padding: 6px 14px; }
+.entry-foot { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.saved { color: var(--ok); font-weight: 600; font-size: 14.5px; }
+.src-note { font-size: 12.5px; color: var(--muted); }
+.recent { display: grid; gap: 10px; }
+.word-chip .zh { font-size: 17px; }
+.word-chip.s-known { border-color: rgba(34, 197, 94, .55); }
+.word-chip.s-learn { border-color: rgba(245, 158, 11, .6); }
+
+/* Chọn bộ thẻ (YCT / Sổ từ của tôi / cả hai) */
+.src-chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-right: 8px; margin-right: 2px; border-right: 1px solid var(--line); }
+.src-chips .tb-label { margin: 0; }
+.face.front.no-pic .fc-hz { font-size: clamp(56px, 12vw, 84px); }
+.miss-noimg { width: 56px; height: 40px; border-radius: 10px; background: var(--accent-soft); }
+
+/* Nghe & viết */
+.say.big { width: 76px; height: 76px; }
+.say.big svg { width: 36px; height: 36px; }
+.q-vi.sm { font-size: 18px; color: var(--muted); font-weight: 600; }
+.spell-form { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
+
+/* Sổ từ của tôi */
+.nb-tools { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.nb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.nb-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px 14px; padding: 10px 12px 10px 14px; border: 1px solid var(--line); border-left: 4px solid #cbd5e1; border-radius: 14px; background: #fff; }
+.nb-item.s-learn { border-left-color: #f59e0b; }
+.nb-item.s-known { border-left-color: #22c55e; }
+.nb-main { appearance: none; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.nb-word { font-size: 22px; color: #3b2a8f; }
+.nb-mean { flex-basis: 100%; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.nb-act { display: flex; align-items: center; gap: 6px; }
+.nb-act .chip { min-height: 32px; padding: 3px 11px; font-size: 13px; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; }
+.pager .btn { min-height: 40px; padding: 7px 14px; }
+.pager-info { font-size: 14px; color: var(--muted); }
+.pager-info b { color: var(--ink); }
+
+@media (max-width: 640px) {
+  .lk-form { grid-template-columns: 1fr; }
+  .card { padding: 14px; border-radius: 16px; }
+  .sense { grid-template-columns: 1fr; gap: 4px; }
+  .yct-hit { grid-template-columns: 80px 1fr; }
+  .yct-hit .pic img { max-width: 80px; }
+  .spell-form { grid-template-columns: 1fr 1fr; }
+  .spell-form .input { grid-column: 1 / -1; }
+  .nb-tools { grid-template-columns: 1fr; }
+  .nb-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .nb-act { grid-column: 1 / -1; flex-wrap: wrap; }
+  .src-chips { border-right: 0; padding-right: 0; width: 100%; justify-content: center; }
+  .toast { bottom: 84px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
   .flip-inner { transition: none !important; }
