@@ -2496,6 +2496,11 @@ function stopTimer() {
   }
 }
 
+// Câu hỏi 3 đáp án (A-C) lưu option_d = '' -> không vẽ nút rỗng.
+function hasOptionText(text) {
+  return String(text ?? '').trim() !== '';
+}
+
 function renderQuestion() {
     const question = questions[currentQuestionIndex];
   if (!question) return;
@@ -2508,7 +2513,7 @@ function renderQuestion() {
     { key: 'B', text: question.option_b },
     { key: 'C', text: question.option_c },
     { key: 'D', text: question.option_d },
-  ];
+  ].filter((option) => hasOptionText(option.text));
 
   elements.quizCard.innerHTML = `
     <p class="question-index">Câu ${currentQuestionIndex + 1}/${questions.length}</p>
@@ -3554,7 +3559,7 @@ function renderTakeQuizScreen() {
     { key: 'B', text: q.option_b },
     { key: 'C', text: q.option_c },
     { key: 'D', text: q.option_d },
-  ];
+  ].filter((opt) => hasOptionText(opt.text));
   const selected = classState.takeQuizAnswers[q.question_id];
   const answeredCount = Object.keys(classState.takeQuizAnswers).length;
   const isLast = idx === questions.length - 1;
@@ -3664,7 +3669,7 @@ function renderReviewScreen() {
         <p class="question-index">Câu ${Number(r.question_order)}</p>
         <p class="question-text">${escapeHtml(r.question_text || '')}</p>
         <div class="option-list">
-          ${['A', 'B', 'C', 'D'].map((key) => {
+          ${['A', 'B', 'C', 'D'].filter((key) => hasOptionText(r['option_' + key.toLowerCase()])).map((key) => {
             const text = r['option_' + key.toLowerCase()];
             const isCorrect = key === r.correct_answer;
             const isSelected = key === r.selected_answer;
