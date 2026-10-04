@@ -24,6 +24,7 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `package.json` | Khai báo project tĩnh, không có dependency |
 | `tenses/` | Mục "12 thì tiếng Anh" (nạp lười, vẽ trong Shadow DOM) |
 | `chinese/` | Mục "Tiếng Trung YCT": `chinese.js` (logic), `chinese-data.js` (301 thẻ), `chinese.css`, `img/*.webp` (hình thẻ) |
+| `vocab/` | Mục "Từ vựng tiếng Anh": `vocab.js` (giao diện, sổ từ, ôn tập, đặt câu), `vocab-api.js` (tra từ: Wiktionary, Google Dịch, MyMemory, Datamuse; soát câu: LanguageTool), `vocab.css`, `vocab-schema.sql` (bảng `vocab_words`) |
 
 ## Cài đặt
 
@@ -98,6 +99,8 @@ lại từ mặt sau thẻ, hình cắt từ mặt trước (WebP 320px, tổng 
 - 36 hình có in sẵn chữ Hán/câu (trường `txt` trong dữ liệu) được ẩn trước khi
   trả lời ở chế độ Ghép câu và Chọn chữ đúng để không lộ đáp án.
 - Sửa file trong `chinese/` thì tăng `CHINESE_MODULE_URL` (`?v=`) trong `app.js`.
+- Sửa file trong `vocab/` thì tăng `VOCAB_MODULE_URL` (`?v=`) trong `app.js`. Mục này cần bảng
+  `vocab_words`: chạy `vocab/vocab-schema.sql` một lần trong Supabase SQL Editor.
   Đổi hình thì tăng `IMG_VERSION` trong `chinese-data.js`.
 
 ## Lớp học (kiểm tra theo lớp)

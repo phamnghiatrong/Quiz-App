@@ -104,6 +104,9 @@ const elements = {
   chineseView: document.getElementById('chineseView'),
   chineseNav: document.getElementById('chineseNav'),
   chineseHost: document.getElementById('chineseHost'),
+  vocabView: document.getElementById('vocabView'),
+  vocabNav: document.getElementById('vocabNav'),
+  vocabHost: document.getElementById('vocabHost'),
 
   quizTitle: document.getElementById('quizTitle'),
   timerBadge: document.getElementById('timerBadge'),
@@ -772,7 +775,7 @@ function setDashboardContainerMode(mode) {
 
 function setView(viewKey) {
   const isAuthed = !elements.userBadge.hidden;
-  const requiresAuth = ['home', 'account', 'history', 'leaderboard', 'classes', 'tenses', 'chinese'].includes(viewKey);
+  const requiresAuth = ['home', 'account', 'history', 'leaderboard', 'classes', 'tenses', 'chinese', 'vocab'].includes(viewKey);
 
   let targetView = viewKey;
   if (requiresAuth && !isAuthed) {
@@ -798,6 +801,7 @@ function setView(viewKey) {
   if (elements.classCard) elements.classCard.hidden = true;
   if (elements.tensesView) elements.tensesView.hidden = true;
   if (elements.chineseView) elements.chineseView.hidden = true;
+  if (elements.vocabView) elements.vocabView.hidden = true;
   if (elements.aboutCard) elements.aboutCard.hidden = true;
   if (elements.appInfoCard) elements.appInfoCard.hidden = true;
   if (elements.feedbackSection) elements.feedbackSection.hidden = true;
@@ -860,6 +864,12 @@ function setView(viewKey) {
       showSection('none');
       if (elements.chineseView) elements.chineseView.hidden = false;
       openChinese();
+      break;
+    case 'vocab':
+      setDashboardContainerMode('default');
+      showSection('none');
+      if (elements.vocabView) elements.vocabView.hidden = false;
+      openVocab();
       break;
     case 'author':
       setDashboardContainerMode('default');
@@ -939,6 +949,34 @@ async function openChinese() {
   }
 }
 
+// Mục "Từ vựng tiếng Anh" (thư mục vocab/): tra từ mới, ôn thẻ, đặt câu.
+// Sổ từ lưu ở bảng Supabase vocab_words (cần chạy vocab/vocab-schema.sql) nên
+// truyền client supabase cho module. Nạp lười giống mục 12 thì / Tiếng Trung.
+// Nhớ tăng ?v= bên dưới mỗi khi sửa vocab.js / vocab-api.js / vocab.css.
+const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261004-1';
+let vocabModulePromise = null;
+
+async function openVocab() {
+  const { vocabHost, vocabNav, vocabView } = elements;
+  if (!vocabHost || !vocabNav) return;
+  try {
+    if (!vocabModulePromise) vocabModulePromise = import(VOCAB_MODULE_URL);
+    const mod = await vocabModulePromise;
+    await mod.mountVocab(vocabHost, vocabNav, {
+      userId: currentUserId,
+      supabase,
+      scrollAnchor: vocabView,
+    });
+  } catch (error) {
+    console.error('[vocab] Không tải được mục Từ vựng tiếng Anh:', error);
+    vocabModulePromise = null; // cho phép thử lại ở lần bấm sau
+    if (!vocabHost.shadowRoot) {
+      vocabHost.innerHTML =
+        '<p class="status-text error">Không tải được mục Từ vựng tiếng Anh. Kiểm tra kết nối mạng rồi bấm lại vào mục này trên menu.</p>';
+    }
+  }
+}
+
 function setSidebarCollapsed(collapsed) {
   if (!elements.sidebar) return;
   elements.sidebar.classList.toggle('is-collapsed', Boolean(collapsed));
@@ -1004,6 +1042,8 @@ function navigateFromSidebar(navKey) {
     scrollToTarget(isAuthed ? elements.tensesView : elements.authSection);
   } else if (navKey === 'chinese') {
     scrollToTarget(isAuthed ? elements.chineseView : elements.authSection);
+  } else if (navKey === 'vocab') {
+    scrollToTarget(isAuthed ? elements.vocabView : elements.authSection);
   } else if (navKey === 'author') {
     scrollToTarget(elements.aboutCard);
   } else if (navKey === 'feedback') {

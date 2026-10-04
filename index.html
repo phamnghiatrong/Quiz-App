@@ -160,10 +160,10 @@
         padding: 9px 16px !important;
         white-space: nowrap !important;
       }
-      /* Dùng id (#tensesNav / #chineseNav) để thắng luật button:not(...) của
-         style-final-fix.css. Mục "Tiếng Trung YCT" (chinese/) dùng chung
-         khung .tenses-* và thanh trang con này. */
-      :is(#tensesNav, #chineseNav) .tn-nav-btn[data-active="true"] {
+      /* Dùng id (#tensesNav / #chineseNav / #vocabNav) để thắng luật button:not(...) của
+         style-final-fix.css. Mục "Tiếng Trung YCT" (chinese/) và "Từ vựng tiếng Anh"
+         (vocab/) dùng chung khung .tenses-* và thanh trang con này. */
+      :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-btn[data-active="true"] {
         background: linear-gradient(135deg, #8b5cf6, #6366f1) !important;
         border-color: rgba(139, 92, 246, 0.45) !important;
         color: #ffffff !important;
@@ -172,7 +172,7 @@
         min-width: 0 !important;
       }
       @container (max-width: 640px) {
-        :is(#tensesNav, #chineseNav) .tn-nav-toggle {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-toggle {
           display: flex !important;
           width: 100% !important;
           min-height: 54px !important;
@@ -183,22 +183,22 @@
           text-align: left !important;
           border-color: rgba(139, 92, 246, 0.45) !important;
         }
-        :is(#tensesNav, #chineseNav) .tn-nav-toggle:hover {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-toggle:hover {
           transform: none !important;
         }
-        :is(#tensesNav, #chineseNav) .tn-nav-toggle-text {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-toggle-text {
           display: grid !important;
           gap: 1px !important;
           min-width: 0 !important;
         }
-        :is(#tensesNav, #chineseNav) .tn-nav-hint {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-hint {
           font-size: 12px !important;
           font-weight: 600 !important;
           color: #64748b !important;
           text-transform: uppercase !important;
           letter-spacing: 0.06em !important;
         }
-        :is(#tensesNav, #chineseNav) .tn-nav-current {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-current {
           font-size: 16px !important;
           font-weight: 700 !important;
           color: #6d28d9 !important;
@@ -206,27 +206,27 @@
           overflow: hidden !important;
           text-overflow: ellipsis !important;
         }
-        :is(#tensesNav, #chineseNav) .tn-nav-caret {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-caret {
           color: #8b5cf6 !important;
           font-size: 13px !important;
         }
-        :is(#tensesNav, #chineseNav) .tn-nav-list {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-list {
           display: none !important;
         }
-        :is(#tensesNav, #chineseNav).is-open .tn-nav-list {
+        :is(#tensesNav, #chineseNav, #vocabNav).is-open .tn-nav-list {
           display: grid !important;
           grid-template-columns: 1fr !important;
           gap: 8px !important;
           margin-top: 10px !important;
           padding: 0 !important;
         }
-        :is(#tensesNav, #chineseNav).is-open .tn-nav-btn {
+        :is(#tensesNav, #chineseNav, #vocabNav).is-open .tn-nav-btn {
           width: 100% !important;
           justify-content: flex-start !important;
           text-align: left !important;
           white-space: normal !important;
         }
-        :is(#tensesNav, #chineseNav).is-open .tn-nav-btn:hover {
+        :is(#tensesNav, #chineseNav, #vocabNav).is-open .tn-nav-btn:hover {
           transform: none !important;
         }
       }
@@ -294,6 +294,16 @@
                 </svg>
               </span>
               <span class="sidebar-label">Tiếng Trung YCT</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="vocab" title="Từ vựng tiếng Anh">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H18v13H5.5A1.5 1.5 0 0 0 4 18.5v-13Z" />
+                  <path d="M4 18.5A1.5 1.5 0 0 0 5.5 20H18v-3" />
+                  <path d="m8 13 2.5-6 2.5 6M8.8 11h3.4" />
+                </svg>
+              </span>
+              <span class="sidebar-label">Từ vựng tiếng Anh</span>
             </button>
             <button class="sidebar-item" type="button" data-nav="author" title="Tác giả">
               <span class="sidebar-icon">✎</span>
@@ -565,7 +575,7 @@
                                     <p class="muted-text">
                     Ứng dụng hướng đến sự đơn giản, dễ sử dụng và hiệu quả thực tế, giúp việc ôn tập trở nên nhẹ nhàng hơn nhưng vẫn đảm bảo tính nghiêm túc trong học tập.
                   </p>
-                  <p class="muted-text"><strong>Phiên bản 4.3</strong> cập nhật ngày 04/10/2026</p>
+                  <p class="muted-text"><strong>Phiên bản 4.4</strong> cập nhật ngày 04/10/2026</p>
                 </section>
 
                 <section class="panel about-card">
@@ -573,6 +583,18 @@
                   <h3>Thông tin cập nhật</h3>
 
                   <div class="changelog-list">
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.4</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm mục "Từ vựng tiếng Anh": nhập từ mới để xem nghĩa tiếng Việt, phiên âm IPA (Anh-Anh, Anh-Mỹ), nghĩa theo từ loại và câu ví dụ; từ được lưu vào sổ từ theo tài khoản.</li>
+                          <li>Ôn sổ từ bằng thẻ lật, trắc nghiệm chọn nghĩa, nghe và viết lại từ.</li>
+                          <li>Đặt câu với từ mới: kiểm tra câu có dùng đúng từ, soát lỗi ngữ pháp, chính tả và dịch câu sang tiếng Việt để tự đối chiếu.</li>
+                        </ul>
+                      </div>
+                    </details>
+
                     <details class="changelog-item" open>
                       <summary><strong>Phiên bản 4.3</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
                       <div class="changelog-content">
@@ -691,6 +713,18 @@
             <div id="chineseHost"><p class="muted-text">Đang tải nội dung...</p></div>
           </section>
         </div>
+
+        <!-- Mục "Từ vựng tiếng Anh" (tra từ, ôn thẻ, đặt câu): nội dung do vocab/vocab.js dựng.
+             Dùng chung class khung với mục 12 thì. -->
+        <div id="vocabView" class="tenses-view" hidden>
+          <section class="panel tenses-head">
+            <p class="eyebrow">Từ vựng tiếng Anh</p>
+            <nav id="vocabNav" class="tenses-subnav" aria-label="Các phần của mục Từ vựng tiếng Anh"></nav>
+          </section>
+          <section class="panel tenses-body">
+            <div id="vocabHost"><p class="muted-text">Đang tải nội dung...</p></div>
+          </section>
+        </div>
       </main>
 
       <footer id="feedbackSection" class="app-footer" hidden>
@@ -708,14 +742,14 @@
               </footer>
 
       <footer id="versionFooter" class="app-footer" hidden aria-label="Phiên bản ứng dụng">
-        <p class="muted-text"><strong>Phiên bản 4.3</strong> cập nhật ngày 04/10/2026</p>
+        <p class="muted-text"><strong>Phiên bản 4.4</strong> cập nhật ngày 04/10/2026</p>
       </footer>
 
         </div>
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20261004-1"></script>
+    <script type="module" src="./app.js?v=20261004-2"></script>
 
   </body>
 </html>
