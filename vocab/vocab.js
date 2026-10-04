@@ -885,7 +885,7 @@ function build({ host, nav, key, api, css, supabase, userId, scrollAnchor }) {
         ? `<li class="ck ok"><b>Có dùng từ "${esc(w.word)}".</b></li>`
         : `<li class="ck no"><b>Câu chưa dùng từ "${esc(w.word)}"</b> (hoặc dạng chia/số nhiều của nó). Hãy viết lại câu có từ này.</li>`);
       if (R.grammarErr) items.push(`<li class="ck warn"><b>Chưa soát được ngữ pháp:</b> ${esc(R.grammarErr)}</li>`);
-      else if (!R.issues.length) items.push('<li class="ck ok"><b>Không thấy lỗi ngữ pháp, chính tả.</b></li>');
+      else if (!R.issues.length) items.push('<li class="ck ok"><b>Không phát hiện lỗi ngữ pháp, chính tả.</b><div class="muted small">Công cụ tự động có thể bỏ sót lỗi chia động từ khi chủ ngữ là danh từ (vd "The router have"), lỗi số nhiều ("many port") hay giới từ. Hãy tự đọc lại câu một lần.</div></li>');
       else items.push(`<li class="ck no"><b>Có ${R.issues.length} chỗ cần xem lại:</b>
           <div class="marked">${markIssues(R.text, R.issues)}</div>
           <ol class="issues">${R.issues.map((m, k) => `<li><span class="iss-txt">"${esc(R.text.substr(m.offset, m.length))}"</span>: ${esc(m.vi || m.message)}${m.vi ? `<span class="muted small"> (${esc(m.message)})</span>` : ''}

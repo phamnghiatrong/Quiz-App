@@ -953,7 +953,7 @@ async function openChinese() {
 // Sổ từ lưu ở bảng Supabase vocab_words (cần chạy vocab/vocab-schema.sql) nên
 // truyền client supabase cho module. Nạp lười giống mục 12 thì / Tiếng Trung.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa vocab.js / vocab-api.js / vocab.css.
-const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261004-1';
+const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261004-2';
 let vocabModulePromise = null;
 
 async function openVocab() {
