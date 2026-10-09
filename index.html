@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quiz App - Ôn tập trắc nghiệm</title>
+    <meta
+      name="description"
+      content="Ứng dụng ôn luyện trắc nghiệm nhiều môn: luyện tập, thi thử, lịch sử ôn tập, bảng xếp hạng và kiểm tra theo lớp."
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Quiz App" />
+    <meta property="og:title" content="Quiz App - Ôn tập trắc nghiệm" />
+    <meta
+      property="og:description"
+      content="Ứng dụng ôn luyện trắc nghiệm nhiều môn: luyện tập, thi thử, lịch sử ôn tập, bảng xếp hạng và kiểm tra theo lớp."
+    />
+    <meta property="og:image" content="https://quiz-app-phamnghiatrong.vercel.app/public/favicon.png" />
+    <meta property="og:url" content="https://quiz-app-phamnghiatrong.vercel.app/" />
+    <meta name="twitter:card" content="summary" />
+
+        <link rel="icon" type="image/png" href="./public/favicon.png" />
+    <link rel="shortcut icon" href="./public/favicon.png" />
+
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#f8fafc" />
+    <link rel="apple-touch-icon" href="./public/favicon.png" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style-final-fix.css?v=20261005-1" />
+    <style>
+      /* Đảm bảo thuộc tính hidden luôn có tác dụng và không bị ghi đè bởi CSS khác */
+      html body [hidden] {
+        display: none !important;
+      }
+
+      /* Nút "hiện/ẩn mật khẩu" (icon con mắt) trong ô mật khẩu.
+         Ghi chú: style-final-fix.css có luật chung cho mọi button/input
+         dùng !important (min-height 44px, padding, border...) nên ở đây
+         phải dùng !important để thắng, nếu không nút sẽ hiện thành một
+         ô vuông trống thay vì icon nhỏ căn giữa. */
+      .password-field-wrap {
+        position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+      .password-field-wrap input {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding-right: 2.75rem !important;
+      }
+      .password-toggle-btn {
+        position: absolute !important;
+        right: 0.3rem !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 2.1rem !important;
+        height: 2.1rem !important;
+        min-height: 0 !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        border-radius: 50% !important;
+        background: transparent !important;
+        color: #64748b !important;
+        cursor: pointer !important;
+        line-height: 0 !important;
+        box-shadow: none !important;
+      }
+      .password-toggle-btn:hover,
+      .password-toggle-btn:focus-visible {
+        transform: translateY(-50%) !important;
+        color: #1e293b !important;
+        background: rgba(100, 116, 139, 0.14) !important;
+        box-shadow: none !important;
+      }
+      .password-toggle-btn svg {
+        display: block !important;
+        width: 20px !important;
+        height: 20px !important;
+        pointer-events: none !important;
+      }
+      .password-toggle-btn .icon-eye-off {
+        display: none !important;
+      }
+      .password-toggle-btn[aria-pressed="true"] .icon-eye {
+        display: none !important;
+      }
+      .password-toggle-btn[aria-pressed="true"] .icon-eye-off {
+        display: block !important;
+      }
+    
+      /* Ô xác minh chống bot (captcha.js). Chiếm trọn 1 hàng của lưới .auth-form;
+         nút gửi ngay sau nó cũng chiếm trọn hàng để không bị đẩy vào cột nhãn 132px.
+         Dùng !important vì style-final-fix.css có luật lưới/nút dùng !important. */
+      .auth-form > .captcha-slot:not([hidden]) {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+        min-height: 65px !important;
+        overflow: hidden !important;
+      }
+      .auth-form > .captcha-slot:not([hidden]) + #authSubmitBtn,
+      .auth-form > .captcha-slot:not([hidden]) + .inline-actions,
+      .auth-form > .captcha-slot:not([hidden]) + #changePasswordBtn {
+        grid-column: 1 / -1 !important;
+      }
+
+      /* Mục "12 thì tiếng Anh" (tenses/). Phần nội dung nằm trong Shadow DOM
+         nên có CSS riêng (tenses/tenses.css); ở đây chỉ định dạng khung ngoài
+         và thanh chuyển trang con. Các nút trang con dùng style nút chung của
+         app; nút đang chọn có data-active="true" -> nền tím như .primary-btn. */
+      .tenses-view:not([hidden]) {
+        display: grid !important;
+        gap: 18px !important;
+        min-width: 0 !important;
+      }
+      .tenses-head {
+        display: grid !important;
+        gap: 14px !important;
+        min-width: 0 !important;
+      }
+      .tenses-head .eyebrow {
+        margin: 0 !important;
+      }
+      /* Thanh chuyển trang con. Khung rộng: hàng nút. Khi card tiêu đề hẹp
+         hơn 640px (điện thoại, cửa sổ nhỏ, tablet dọc) thì đổi thành menu sổ
+         xuống. Dùng container query theo độ rộng card (không theo màn hình)
+         vì sidebar chiếm chỗ nên card có thể hẹp dù màn hình > 768px. */
+      .tenses-head {
+        container-type: inline-size;
+      }
+      .tenses-subnav {
+        position: relative !important;
+        min-width: 0 !important;
+      }
+      .tenses-subnav .tn-nav-toggle {
+        display: none !important;
+      }
+      .tenses-subnav .tn-nav-list {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+        padding: 2px 0 !important;
+      }
+      .tenses-subnav .tn-nav-btn {
+        min-height: 42px !important;
+        padding: 9px 16px !important;
+        white-space: nowrap !important;
+      }
+      /* Dùng id (#tensesNav / #chineseNav / #vocabNav) để thắng luật button:not(...) của
+         style-final-fix.css. Mục "Tiếng Trung YCT" (chinese/) và "Từ vựng tiếng Anh"
+         (vocab/) dùng chung khung .tenses-* và thanh trang con này. */
+      :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-btn[data-active="true"] {
+        background: linear-gradient(135deg, #8b5cf6, #6366f1) !important;
+        border-color: rgba(139, 92, 246, 0.45) !important;
+        color: #ffffff !important;
+      }
+      .tenses-body {
+        min-width: 0 !important;
+      }
+      @container (max-width: 640px) {
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-toggle {
+          display: flex !important;
+          width: 100% !important;
+          min-height: 54px !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 12px !important;
+          padding: 10px 16px !important;
+          text-align: left !important;
+          border-color: rgba(139, 92, 246, 0.45) !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-toggle:hover {
+          transform: none !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-toggle-text {
+          display: grid !important;
+          gap: 1px !important;
+          min-width: 0 !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-hint {
+          font-size: 12px !important;
+          font-weight: 600 !important;
+          color: #64748b !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.06em !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-current {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          color: #6d28d9 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-caret {
+          color: #8b5cf6 !important;
+          font-size: 13px !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-list {
+          display: none !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav).is-open .tn-nav-list {
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          gap: 8px !important;
+          margin-top: 10px !important;
+          padding: 0 !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav).is-open .tn-nav-btn {
+          width: 100% !important;
+          justify-content: flex-start !important;
+          text-align: left !important;
+          white-space: normal !important;
+        }
+        :is(#tensesNav, #chineseNav, #vocabNav).is-open .tn-nav-btn:hover {
+          transform: none !important;
+        }
+      }
+    </style>
+  </head>
+    <body>
+      <div class="app-shell">
+         <header class="app-brand-plain" aria-label="Quiz App">
+      <img src="./public/favicon.png" alt="" class="app-brand-logo" />
+      <img src="./public/2.png" alt="Quiz App" class="app-brand-name" />
+    </header>
+        <div class="app-frame">
+          <div class="sidebar-column">
+                <aside id="sidebar" class="sidebar" aria-label="Thanh tác vụ" hidden>
+                  
+          <button id="sidebarToggle" class="sidebar-item sidebar-toggle" type="button" title="Thu gọn/Mở rộng menu">
+            <span class="sidebar-icon">☰</span>
+            <span class="sidebar-label">Thu gọn menu</span>
+            <span class="sidebar-caret" aria-hidden="true">‹</span>
+          </button>
+          <nav class="sidebar-nav" aria-label="Điều hướng">
+                        <button class="sidebar-item" type="button" data-nav="home" title="Trang chủ">
+              <span class="sidebar-icon">⌂</span>
+              <span class="sidebar-label">Trang chủ</span>
+            </button>
+
+
+            <button class="sidebar-item" type="button" data-nav="account" title="Tài khoản">
+              <span class="sidebar-icon">⚙</span>
+              <span class="sidebar-label">Tài khoản</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="history" title="Lịch sử ôn tập">
+              <span class="sidebar-icon">⏱</span>
+              <span class="sidebar-label">Lịch sử ôn tập</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="leaderboard" title="Bảng xếp hạng">
+              <span class="sidebar-icon">★</span>
+              <span class="sidebar-label">Bảng xếp hạng</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="classes" title="Lớp học">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M12 4.5 20 9 12 13.5 4 9 12 4.5Z" />
+                  <path d="M7.5 10.6V14.6C7.5 16 9.6 17.1 12 17.1s4.5-1.1 4.5-2.5v-4" />
+                  <path d="M20 9v4.4" />
+                </svg>
+              </span>
+              <span class="sidebar-label">Lớp học</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="tenses" title="12 thì tiếng Anh">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="8.5" />
+                  <path d="M12 7.5V12l3 2" />
+                </svg>
+              </span>
+              <span class="sidebar-label">12 thì tiếng Anh</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="chinese" title="Tiếng Trung YCT">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <rect x="7.5" y="3.5" width="12" height="15" rx="2" />
+                  <path d="M4.5 7v11.5a2 2 0 0 0 2 2h9" />
+                  <path d="M10.5 8h6M13.5 6.5v8M11 14.5l2.5-3 2.5 3" />
+                </svg>
+              </span>
+              <span class="sidebar-label">Tiếng Trung YCT</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="vocab" title="Từ vựng tiếng Anh">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H18v13H5.5A1.5 1.5 0 0 0 4 18.5v-13Z" />
+                  <path d="M4 18.5A1.5 1.5 0 0 0 5.5 20H18v-3" />
+                  <path d="m8 13 2.5-6 2.5 6M8.8 11h3.4" />
+                </svg>
+              </span>
+              <span class="sidebar-label">Từ vựng tiếng Anh</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="author" title="Tác giả">
+              <span class="sidebar-icon">✎</span>
+              <span class="sidebar-label">Tác giả</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="feedback" title="Góp ý">
+              <span class="sidebar-icon">✉</span>
+              <span class="sidebar-label">Góp ý</span>
+            </button>
+            <button class="sidebar-item" type="button" data-nav="aboutApp" title="Giới thiệu ứng dụng">
+              <span class="sidebar-icon">ⓘ</span>
+              <span class="sidebar-label">Giới thiệu ứng dụng</span>
+            </button>
+            <button id="loginNavBtn" class="sidebar-item" type="button" data-nav="auth" title="Đăng nhập">
+              <span class="sidebar-icon">🔑</span>
+              <span class="sidebar-label">Đăng nhập</span>
+            </button>
+            <div id="userBadge" class="sidebar-item" hidden title="Tài khoản">
+              <span class="sidebar-icon">👤</span>
+              <span class="sidebar-label"><span id="userEmail">user@example.com</span></span>
+            </div>
+            <button id="logoutBtn" class="sidebar-item" type="button" title="Đăng xuất" hidden>
+              <span class="sidebar-icon">⎋</span>
+              <span class="sidebar-label">Đăng xuất</span>
+            </button>
+          </nav>
+
+
+        </aside>
+  </div>
+                <div class="app-content">
+             
+      <main class="main-grid">
+                <section id="authSection" class="panel auth-panel">
+          <div class="intro-card">
+            <p class="eyebrow">Chào mừng</p>
+            <h2>Đăng nhập hoặc tạo tài khoản để bắt đầu</h2>
+          </div>
+
+
+
+
+          <div class="auth-mode-switch" role="tablist" aria-label="Chế độ xác thực">
+            <button class="mode-chip active" type="button" data-auth-mode="login">Đăng nhập</button>
+            <button class="mode-chip" type="button" data-auth-mode="register">Đăng ký</button>
+          </div>
+
+                    <form id="authForm" class="auth-form">
+
+                        <label for="fullNameInput" id="fullNameLabel" hidden>Họ và tên</label>
+                        <input
+                          id="fullNameInput"
+                          type="text"
+                          placeholder="Nhập họ và tên"
+                          autocomplete="name"
+                          hidden
+                        />
+
+            <label for="emailInput">Email</label>
+            <input
+              id="emailInput"
+              type="email"
+              inputmode="email"
+              placeholder="you@example.com"
+              autocomplete="username"
+              autocapitalize="none"
+              autocorrect="off"
+              spellcheck="false"
+              required
+            />
+
+
+
+            <label for="passwordInput">Mật khẩu</label>
+
+            <div class="password-field-wrap">
+              <input
+                id="passwordInput"
+                type="password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+                autocapitalize="none"
+                autocorrect="off"
+                spellcheck="false"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                data-password-toggle="passwordInput"
+                aria-label="Hiện mật khẩu"
+                aria-pressed="false"
+              >
+                <svg class="icon-eye" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M12 5c-5.5 0-9.5 4.5-10.5 7 1 2.5 5 7 10.5 7s9.5-4.5 10.5-7c-1-2.5-5-7-10.5-7zm0 11.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/>
+                </svg>
+                <svg class="icon-eye-off" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M3.28 2.22 2.22 3.28l3.4 3.4C3.53 8.1 1.94 9.9 1 12c1 2.5 5 7 11 7 1.98 0 3.75-.5 5.26-1.28l3.24 3.24 1.06-1.06L3.28 2.22zM12 16.5c-.57 0-1.13-.1-1.65-.28l-1.62-1.62a4.5 4.5 0 0 0 5.87-5.87l1.62 1.62c.18.52.28 1.08.28 1.65a4.5 4.5 0 0 1-4.5 4.5zm0-11c1.86 0 3.65.42 5.18 1.15l-1.53 1.53A9.1 9.1 0 0 0 12 7.5c-5 0-8.4 3.7-9.4 5.7.32.6.84 1.46 1.6 2.35l-1.43 1.43C1.4 15.15.3 13.55 0 12c1-2.5 5-7 12-7z"/>
+                </svg>
+              </button>
+            </div>
+
+            <label for="confirmPasswordInput" id="confirmPasswordLabel" hidden>Nhập lại mật khẩu</label>
+            <div class="password-field-wrap">
+              <input id="confirmPasswordInput" type="password" placeholder="Nhập lại mật khẩu" hidden />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                data-password-toggle="confirmPasswordInput"
+                aria-label="Hiện mật khẩu nhập lại"
+                aria-pressed="false"
+                hidden
+              >
+                <svg class="icon-eye" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M12 5c-5.5 0-9.5 4.5-10.5 7 1 2.5 5 7 10.5 7s9.5-4.5 10.5-7c-1-2.5-5-7-10.5-7zm0 11.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/>
+                </svg>
+                <svg class="icon-eye-off" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M3.28 2.22 2.22 3.28l3.4 3.4C3.53 8.1 1.94 9.9 1 12c1 2.5 5 7 11 7 1.98 0 3.75-.5 5.26-1.28l3.24 3.24 1.06-1.06L3.28 2.22zM12 16.5c-.57 0-1.13-.1-1.65-.28l-1.62-1.62a4.5 4.5 0 0 0 5.87-5.87l1.62 1.62c.18.52.28 1.08.28 1.65a4.5 4.5 0 0 1-4.5 4.5zm0-11c1.86 0 3.65.42 5.18 1.15l-1.53 1.53A9.1 9.1 0 0 0 12 7.5c-5 0-8.4 3.7-9.4 5.7.32.6.84 1.46 1.6 2.35l-1.43 1.43C1.4 15.15.3 13.55 0 12c1-2.5 5-7 12-7z"/>
+                </svg>
+              </button>
+            </div>
+
+            <div id="authCaptcha" class="captcha-slot" hidden></div>
+
+            <button id="authSubmitBtn" class="primary-btn" type="submit">Đăng nhập</button>
+          </form>
+
+          <p id="authMessage" class="status-text" aria-live="polite"></p>
+        </section>
+
+                <section id="dashboardSection" class="panel" hidden>
+          <div id="homeView"></div>
+
+                    <div id="accountView" class="hero-card" hidden>
+            <p class="eyebrow">Tài khoản</p>
+            <h2>Thông tin tài khoản</h2>
+            <ul class="about-list">
+              <li><strong>Họ tên:</strong> <span id="accountName">...</span></li>
+              <li><strong>Email:</strong> <span id="accountEmail">...</span></li>
+            </ul>
+
+            <div class="account-actions">
+              <button id="editNameBtn" class="ghost-btn" type="button">Đổi tên</button>
+            </div>
+
+                        <div id="editNameForm" class="auth-form" hidden>
+              <label for="newNameInput">Họ tên</label>
+              <input id="newNameInput" type="text" placeholder="Nhập họ tên" autocomplete="name" />
+              <div class="inline-actions">
+                <button id="saveNameBtn" class="primary-btn" type="button">Lưu</button>
+                <button id="cancelNameBtn" class="ghost-btn" type="button">Hủy</button>
+              </div>
+            </div>
+          </div>
+
+
+          <section id="historyCard" class="history-card" hidden>
+            <div class="dashboard-actions">
+              <button id="retryWrongBtn" class="ghost-btn" type="button" hidden>
+                Làm lại câu sai gần nhất
+              </button>
+            </div>
+
+
+            <div class="section-header">
+
+              <div>
+                <p class="eyebrow">Lịch sử của bạn</p>
+              </div>
+              <button id="refreshHistoryBtn" class="ghost-btn">Làm mới</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Chế độ</th>
+                    <th>Tổng câu</th>
+                    <th>Đúng</th>
+                    <th>Sai</th>
+                    <th>Điểm %</th>
+                    <th>Thời lượng</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody"></tbody>
+              </table>
+                        </div>
+          </section>
+
+                    <section id="leaderboardCard" class="leaderboard-card" hidden>
+
+
+
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Bảng xếp hạng</p>
+                <h3>Top tổng điểm</h3>
+              </div>
+              <button id="refreshLeaderboardBtn" class="ghost-btn" type="button">Làm mới</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hạng</th>
+                    <th>Tên</th>
+                    <th>Tổng điểm</th>
+                    <th>Số lượt</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboardTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="classCard" class="history-card" hidden>
+            <div id="classContent"></div>
+          </section>
+        </section>
+
+        <section id="quizSection" class="panel" hidden>
+
+          <div class="quiz-header">
+            <div>
+              <p class="eyebrow">Đang làm bài</p>
+              <h2 id="quizTitle">Bộ đề</h2>
+                        </div>
+            <div class="quiz-header-actions">
+
+              <button id="pauseBtn" class="ghost-btn" type="button" hidden>Tạm dừng</button>
+              <div class="timer-badge" id="timerBadge">00:00</div>
+          </div>
+
+
+          </div>
+
+          <div id="quizStatus" class="quiz-status muted-text">Đang chuẩn bị câu hỏi...</div>
+          <div id="quizCard" class="quiz-card"></div>
+          <div class="quiz-actions">
+            <button id="nextQuestionBtn" class="primary-btn" hidden>Câu tiếp theo</button>
+            <button id="submitQuizBtn" class="primary-btn" hidden>Nộp bài</button>
+          </div>
+        </section>
+
+        <aside id="aboutCard" class="panel about-card" hidden>
+          <p class="eyebrow">Giới thiệu</p>
+          <h3>Người tạo ứng dụng</h3>
+          <ul class="about-list">
+            <li>Phạm Nghĩa Trọng</li>
+            <li>Ngành Truyền Thông & Mạng Máy Tính</li>
+            <li>Khoa Công Nghệ Thông Tin. Trường Cao đẳng Công nghệ Thủ Đức</li>
+            <li>Người lên ý tưởng giao diện và logic cho ứng dụng.</li>
+          </ul>
+          <p class="muted-text">Ứng dụng được dùng Supabase Authentication và RPC để quản lý bài làm.</p>
+        </aside>
+              <div id="appInfoCard" class="app-info-wrapper" hidden>
+                <section class="panel about-card" style="margin-bottom: 24px;">
+                  <p class="eyebrow">Giới thiệu ứng dụng</p>
+                  <h3>Quiz App</h3>
+                  <p class="muted-text">
+                    Ứng dụng Quiz App được xây dựng nhằm hỗ trợ người dùng ôn luyện kiến thức các môn học một cách chủ động, trực quan và hiệu quả.
+                    Ứng dụng cung cấp hệ thống câu hỏi trắc nghiệm theo nhiều chế độ làm bài, giúp người học dễ dàng kiểm tra mức độ hiểu bài, rèn luyện kỹ năng ghi nhớ
+                    và chuẩn bị tốt hơn cho các bài kiểm tra.
+                  </p>
+                  <p class="muted-text">
+                    Người dùng có thể lựa chọn số lượng câu hỏi phù hợp với nhu cầu ôn tập, theo dõi kết quả sau mỗi lượt làm bài, xem lại lịch sử ôn tập và cải thiện điểm số
+                    qua từng lần luyện tập. Bên cạnh đó, bảng xếp hạng giúp tạo thêm động lực học tập, khuyến khích tinh thần cố gắng và cạnh tranh tích cực giữa các người dùng.
+                  </p>
+                                    <p class="muted-text">
+                    Ứng dụng hướng đến sự đơn giản, dễ sử dụng và hiệu quả thực tế, giúp việc ôn tập trở nên nhẹ nhàng hơn nhưng vẫn đảm bảo tính nghiêm túc trong học tập.
+                  </p>
+                  <p class="muted-text"><strong>Phiên bản 4.5</strong> cập nhật ngày 04/10/2026</p>
+                </section>
+
+                <section class="panel about-card">
+                  <p class="eyebrow">Thông tin</p>
+                  <h3>Thông tin cập nhật</h3>
+
+                  <div class="changelog-list">
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.5</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Sửa lỗi chuyển sang cửa sổ/tab khác rồi quay lại bị thoát khỏi màn hình đang học. Quay lại trong 10 phút: giữ nguyên chỗ đang học, bài làm tự chạy tiếp. Rời quá 10 phút: bài được lưu và app về trang chủ.</li>
+                          <li>Tiếng Trung YCT: thêm "Tra từ mới" (gõ chữ Hán hoặc nghĩa tiếng Việt), "Nghe &amp; viết" (gõ lại chữ Hán hoặc pinyin) và "Sổ từ của tôi" lưu theo tài khoản; ôn các từ đã tra bằng Lật thẻ.</li>
+                          <li>Từ vựng tiếng Anh: bỏ nút giọng Anh-Anh, phần Đặt câu có ô tìm từ thay cho danh sách dài, sổ từ chia trang 10 từ.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.4</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm mục "Từ vựng tiếng Anh": nhập từ mới để xem nghĩa tiếng Việt, phiên âm IPA (Anh-Anh, Anh-Mỹ), nghĩa theo từ loại và câu ví dụ; từ được lưu vào sổ từ theo tài khoản.</li>
+                          <li>Ôn sổ từ bằng thẻ lật, trắc nghiệm chọn nghĩa, nghe và viết lại từ.</li>
+                          <li>Đặt câu với từ mới: kiểm tra câu có dùng đúng từ, soát lỗi ngữ pháp, chính tả và dịch câu sang tiếng Việt để tự đối chiếu.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.3</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Tiếng Anh 2: thêm 65 câu từ đề cương ôn tập (30 câu Exchange chọn câu đáp lại, 35 câu Writing chọn câu viết đúng từ gợi ý), có giải thích.</li>
+                          <li>Hỗ trợ câu hỏi chỉ có 3 đáp án (A-C): không còn hiện ô đáp án trống.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.2</strong>&nbsp;- Cập nhật ngày: 03/10/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm mục "Tiếng Trung YCT": 301 thẻ từ vựng YCT 1-4 có hình minh hoạ, pinyin, nghĩa tiếng Việt và câu ví dụ.</li>
+                          <li>Các chế độ học: lật thẻ, nhìn chữ và hình đoán nghĩa, ghép câu, chọn chữ đúng; có phát âm và theo dõi tiến độ từng thẻ.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.1</strong>&nbsp;- Cập nhật ngày: 30/09/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm mục "12 thì tiếng Anh" trên menu, chia thành 7 trang: bản đồ 12 thì, chi tiết từng thì, máy lắp câu, cặp thì dễ nhầm, chính tả và động từ bất quy tắc, phòng luyện, bộ đề 49 câu.</li>
+                          <li>Sửa lỗi icon "Lớp học" không hiện trên menu điện thoại.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 4.0</strong>&nbsp;- Cập nhật ngày: 17/09/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm tính năng "Lớp học": tạo lớp, mời học sinh tham gia bằng mã, giao bài kiểm tra riêng cho lớp và xem bảng xếp hạng của lớp.</li>
+                          <li>Thêm môn học mới: Mạng cáp quang.</li>
+                          <li>Thêm nút hiện/ẩn mật khẩu khi đăng nhập, giúp kiểm tra chữ đã gõ trước khi bấm đăng nhập.</li>
+                          <li>Cải thiện đăng nhập trên điện thoại, giảm lỗi gõ sai email/mật khẩu.</li>
+                          <li>Khắc phục lỗi email "Quên mật khẩu" không gửi được cho một số tài khoản.</li>
+                          <li>Đồng bộ lại giao diện, biểu tượng và tên ứng dụng cho nhất quán hơn.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 3.0</strong>&nbsp;- Cập nhật ngày: 19/06/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Tối ưu giao diện nhẹ hơn.</li>
+                          <li>Cải thiện trải nghiệm trên điện thoại.</li>
+                          <li>Cải thiện trải nghiệm trên laptop.</li>
+                          <li>Cập nhật thêm môn học.</li>
+                          <li>Nâng cấp trãi nghiệm.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 2.5</strong>&nbsp;- Cập nhật ngày: 17/06/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Tối ưu giao diện nhẹ hơn.</li>
+                          <li>Cải thiện trải nghiệm trên điện thoại.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 2.0</strong>&nbsp;- Ngày phát hành: 14/06/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Cập nhật giao diện hiện đại.</li>
+                          <li>Cập nhật bảo mật.</li>
+                          <li>Cập nhật phần luyện tập.</li>
+                          <li>Thêm lịch sử ôn tập, bảng xếp hạng.</li>
+                        </ul>
+                      </div>
+                    </details>
+
+                    <details class="changelog-item" open>
+                      <summary><strong>Phiên bản 1.0</strong>&nbsp;- Ngày phát hành: 06/06/2026</summary>
+                      <div class="changelog-content">
+                        <p>Phiên bản phát hành đầu tiên.</p>
+                      </div>
+                    </details>
+                  </div>
+                </section>
+              </div>
+
+        <!-- Mục "12 thì tiếng Anh": nội dung do tenses/tenses.js dựng (nạp khi mở lần đầu) -->
+        <div id="tensesView" class="tenses-view" hidden>
+          <section class="panel tenses-head">
+            <p class="eyebrow">12 thì tiếng Anh</p>
+            <nav id="tensesNav" class="tenses-subnav" aria-label="Các phần của 12 thì tiếng Anh"></nav>
+          </section>
+          <section class="panel tenses-body">
+            <div id="tensesHost"><p class="muted-text">Đang tải nội dung...</p></div>
+          </section>
+        </div>
+
+        <!-- Mục "Tiếng Trung YCT" (học từ vựng bằng thẻ): nội dung do chinese/chinese.js dựng.
+             Dùng chung class khung với mục 12 thì. -->
+        <div id="chineseView" class="tenses-view" hidden>
+          <section class="panel tenses-head">
+            <p class="eyebrow">Tiếng Trung YCT</p>
+            <nav id="chineseNav" class="tenses-subnav" aria-label="Các phần của mục Tiếng Trung YCT"></nav>
+          </section>
+          <section class="panel tenses-body">
+            <div id="chineseHost"><p class="muted-text">Đang tải nội dung...</p></div>
+          </section>
+        </div>
+
+        <!-- Mục "Từ vựng tiếng Anh" (tra từ, ôn thẻ, đặt câu): nội dung do vocab/vocab.js dựng.
+             Dùng chung class khung với mục 12 thì. -->
+        <div id="vocabView" class="tenses-view" hidden>
+          <section class="panel tenses-head">
+            <p class="eyebrow">Từ vựng tiếng Anh</p>
+            <nav id="vocabNav" class="tenses-subnav" aria-label="Các phần của mục Từ vựng tiếng Anh"></nav>
+          </section>
+          <section class="panel tenses-body">
+            <div id="vocabHost"><p class="muted-text">Đang tải nội dung...</p></div>
+          </section>
+        </div>
+      </main>
+
+      <footer id="feedbackSection" class="app-footer" hidden>
+        <p class="eyebrow">Góp ý</p>
+        <h3>Gửi góp ý về ứng dụng</h3>
+        <div class="feedback-form">
+          <label for="feedbackInput">Nội dung góp ý</label>
+          <textarea id="feedbackInput" rows="5" placeholder="Nhập góp ý của bạn..."></textarea>
+          <button id="sendFeedbackBtn" class="primary-btn" type="button">Gửi góp ý</button>
+          <p class="muted-text">
+            Khi nhấn gửi, hệ thống sẽ mở ứng dụng Email trên thiết bị để gửi trực tiếp cho tác giả.
+            Tiêu đề mặc định sẽ là <strong>Góp ý về ứng dụng Quiz App</strong>.
+          </p>
+        </div>
+              </footer>
+
+      <footer id="versionFooter" class="app-footer" hidden aria-label="Phiên bản ứng dụng">
+        <p class="muted-text"><strong>Phiên bản 4.5</strong> cập nhật ngày 04/10/2026</p>
+      </footer>
+
+        </div>
+      </div>
+      </div>
+
+    <script type="module" src="./app.js?v=20261009-1"></script>
+
+  </body>
+</html>
