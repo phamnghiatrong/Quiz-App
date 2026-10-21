@@ -1,8 +1,4 @@
 # Quiz App - Ôn tập trắc nghiệm
-
-Ứng dụng web trắc nghiệm nhiều môn, dùng Supabase (Auth + Postgres + RPC).
-Không có bước build: toàn bộ là file tĩnh, deploy thẳng lên Vercel.
-
 ## Cấu trúc file
 
 Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
@@ -25,34 +21,6 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `tenses/` | Mục "12 thì tiếng Anh" (nạp lười, vẽ trong Shadow DOM) |
 | `chinese/` | Mục "Tiếng Trung YCT": `chinese.js` (logic, gồm Tra từ mới / Nghe & viết / Sổ từ của tôi), `chinese-api.js` (tra từ: Google Dịch, Tatoeba), `chinese-data.js` (301 thẻ), `chinese.css`, `img/*.webp` (hình thẻ). Sổ từ lưu ở bảng `vocab_words` với `lang = 'zh'` |
 | `vocab/` | Mục "Từ vựng tiếng Anh": `vocab.js` (giao diện, sổ từ, ôn tập, đặt câu), `vocab-api.js` (tra từ: Wiktionary, Google Dịch, MyMemory, Datamuse; soát câu: LanguageTool), `vocab.css`, `vocab-schema.sql` (bảng `vocab_words`) |
-
-## Cài đặt
-
-### 1. Supabase
-
-1. Tạo project trên [supabase.com](https://supabase.com).
-2. Mở **SQL Editor**, dán toàn bộ `schema.sql` và Run.
-   File này chạy lại được nhiều lần, không xoá bảng và không xoá dữ liệu cũ.
-3. Thêm dữ liệu vào bảng `subjects` và `questions` (Table Editor hoặc import CSV).
-   Nhớ gán `questions.subject_slug` khớp với `subjects.slug`, nếu không câu hỏi
-   sẽ không hiện ra khi chọn môn.
-4. Vào **Authentication → URL Configuration**, thêm URL trang đặt lại mật khẩu
-   vào Redirect URLs, ví dụ `https://<ten-mien>/reset-password.html`.
-5. Copy Project URL và publishable key (`sb_publishable_...`) vào `config.js`.
-
-> Publishable key được thiết kế để công khai phía client. Bảo mật dữ liệu dựa
-> vào RLS trong `schema.sql`, tuyệt đối không dùng `service_role` key ở frontend.
-
-### 2. Chạy ở máy
-
-Mở `index.html` bằng Live Server (hoặc bất kỳ static server nào).
-Service worker tự động tắt khi chạy trên `localhost` / `127.0.0.1` để không
-phục vụ bản cache cũ trong lúc phát triển.
-
-### 3. Deploy
-
-Đẩy code lên Git rồi import vào Vercel. Không cần cấu hình build
-(Framework Preset: Other, Build Command: để trống). `vercel.json` lo phần còn lại.
 
 ## Tính năng
 
@@ -153,11 +121,3 @@ chủ đích, dự kiến bổ sung ở Phase 2/3):
   trong `index.html`. Sau mỗi lần sửa 2 file đó, nhớ tăng số phiên bản này,
   nếu không trình duyệt cũ sẽ dùng lại bản cũ.
 - **Icon**: dùng chung `public/favicon.png` (512x512) cho mọi kích thước.
-
-## Việc còn lại
-
-- [ ] Gộp `style.css` và `style-final-fix.css`, giảm bớt `!important`.
-- [ ] Lớp học Phase 2: QR code ảnh, email mời, feedback từng câu của giáo
-      viên, export Excel/PDF bảng tổng kết (xem `CLASS_FEATURE_DESIGN.md`).
-- [ ] Lớp học Phase 3: chống gian lận nâng cao, lưu nháp câu trả lời giữa
-      chừng, chặn nộp bài trễ ở phía server.
