@@ -1,4 +1,45 @@
-# Thiết kế Feature: Kiểm Tra Theo Lớp (Class-Based Quizzes)
+# Thiết kế Feature: Học nhóm (trước đây là Kiểm Tra Theo Lớp)
+
+## Cập nhật 11/2026: bản đang chạy
+
+Mục này là thiết kế hiện hành. Các mục 1-9 bên dưới là bản nháp ban đầu, giữ lại để tham khảo ý
+tưởng. Chỗ nào khác với mục này thì lấy mục này. Trên giao diện gọi là "nhóm", tên nội bộ vẫn là
+`classes`, `class_members`, `class_quizzes`, `classState`.
+
+**Đã thay so với bản nháp:**
+
+| Bản nháp | Bản đang chạy |
+|---|---|
+| Nhập mã là vào lớp ngay | Nhập mã tạo yêu cầu `pending`, chủ nhóm hoặc quản trị viên duyệt. `join_class_by_code` giữ lại nhưng chỉ tạo yêu cầu |
+| 2 vai trò admin, member | 3 vai trò: người tạo (`classes.owner_id`), quản trị viên (`role = 'admin'`), người tham gia (`role = 'member'`). Chỉ người tham gia làm bài |
+| Bài mở theo `start_at`, `end_at` đặt trước | Bài ở `draft`, bấm Bắt đầu thì `running` với `end_at = now() + số phút`, bắt buộc có thời gian làm bài. Mỗi nhóm một bài `running` (unique index một phần) |
+| Không có mật khẩu | Mật khẩu 4-32 ký tự, băm bcrypt trong `class_quiz_secrets` (RLS bật, không policy). Sai 5 lần trong 10 phút khoá 5 phút (`class_quiz_password_failures`) |
+| Nộp xong thấy đáp án ngay | Chỉ thấy khi bài kết thúc, kể cả qua REST: policy `class_quiz_attempts_select_scope` yêu cầu `class_quiz_is_closed()` |
+| Bảng xếp hạng lớp | `get_class_quiz_results`: chỉ khi bài đã kết thúc, 6 cột theo Mã sinh viên, xuất CSV |
+
+**Trạng thái:**
+
+- Thành viên: `pending` -> `active` -> `left` hoặc `removed`. Người đã rời hoặc bị mời ra gửi lại thì
+  thành yêu cầu mới. Từ chối thì xoá dòng.
+- Bài: `draft` -> `running` -> `closed`. Trạng thái hiệu lực tính ở server: `running` mà quá `end_at`
+  coi như `closed` (`class_quiz_effective_status`).
+- Lượt làm: `in_progress` -> `submitted`. `draft_answers` lưu tạm `{question_id: 'A'}`.
+
+**Chấm điểm:** `score10 = round(đúng * 10.0 / tổng, 2)`, dùng chung qua `grade_class_attempt`. Khi bài
+kết thúc, `finalize_class_quiz` chấm các lượt dở theo `draft_answers`, đặt `auto_submitted = true`,
+`submitted_at = least(now(), end_at)`. Chấm lười ở đầu các RPC đọc, khoá dòng `for update` để không chấm
+2 lần, không cần pg_cron. Nhiều lượt thì lấy điểm cao nhất, bằng điểm lấy thời gian ngắn hơn.
+
+**Sai mật khẩu không dùng `raise exception`:** raise sẽ hoàn tác giao dịch và số lần sai không được lưu.
+`start_class_quiz_attempt` trả một dòng có `error_code` (`password_required`, `wrong_password`, `locked`),
+`tries_left`, `retry_after_seconds`.
+
+**Việc để ngỏ:** chủ nhóm xem chi tiết bài làm từng người (chưa làm); quản trị viên sửa tên nhóm
+(không cho). Danh sách RPC đầy đủ và quyền từng hàm xem mục 5 trong `schema.sql`.
+
+---
+
+# Bản nháp ban đầu
 
 ## 1. Tổng quan Feature
 

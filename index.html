@@ -6,7 +6,7 @@
     <title>Quiz App - Ôn tập trắc nghiệm</title>
     <meta
       name="description"
-      content="Ứng dụng ôn luyện trắc nghiệm nhiều môn: luyện tập, thi thử, lịch sử ôn tập, bảng xếp hạng và kiểm tra theo lớp."
+      content="Ứng dụng ôn luyện trắc nghiệm nhiều môn: luyện tập, thi thử, lịch sử ôn tập, bảng xếp hạng và học nhóm."
     />
 
     <meta property="og:type" content="website" />
@@ -14,7 +14,7 @@
     <meta property="og:title" content="Quiz App - Ôn tập trắc nghiệm" />
     <meta
       property="og:description"
-      content="Ứng dụng ôn luyện trắc nghiệm nhiều môn: luyện tập, thi thử, lịch sử ôn tập, bảng xếp hạng và kiểm tra theo lớp."
+      content="Ứng dụng ôn luyện trắc nghiệm nhiều môn: luyện tập, thi thử, lịch sử ôn tập, bảng xếp hạng và học nhóm."
     />
     <meta property="og:image" content="https://quiz-app-phamnghiatrong.vercel.app/public/favicon.png" />
     <meta property="og:url" content="https://quiz-app-phamnghiatrong.vercel.app/" />
@@ -589,12 +589,16 @@
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
                         <ul class="about-list">
-                          <li>Menu ngang trên cùng thay cho thanh bên trái: Trang chủ, Môn học, Bảng xếp hạng, Lớp học, Học ngoại ngữ, Thông tin, biểu tượng Tài khoản và biểu tượng Tùy chỉnh. Trên điện thoại các mục gom vào nút Menu.</li>
+                          <li>Menu ngang trên cùng thay cho thanh bên trái: Trang chủ, Môn học, Bảng xếp hạng, Học nhóm, Học ngoại ngữ, Thông tin, biểu tượng Tài khoản và biểu tượng Tùy chỉnh. Trên điện thoại các mục gom vào nút Menu.</li>
                           <li>Trang chủ mới: video toàn màn hình, thanh menu trong suốt nằm trên video, cuộn xuống thì video mờ dần và menu hiện lại nền tối.</li>
                           <li>Chọn môn ngay trên menu, không cần bước xác nhận. Bài đang làm dở: nút Tiếp tục nằm ở màn của môn đó, rời app quá 10 phút thì quay về đúng màn môn học của bài đang làm.</li>
                           <li>Bảng xếp hạng xem theo từng môn. Mỗi người một hạng riêng, bằng điểm thì ai ít lượt thi hơn xếp trên.</li>
                           <li>Học ngoại ngữ: Tiếng Anh gộp 12 thì và Từ vựng thành một trang có 2 tab, Tiếng Trung giữ nguyên.</li>
                           <li>Thêm mục Tùy chỉnh: giao diện Sáng, Tối hoặc Theo hệ thống, cỡ chữ và font chữ.</li>
+                          <li>Học nhóm mới: tạo nhóm, tham gia bằng mã hoặc link mời và phải được duyệt. Có 3 vai trò Người tạo nhóm, Quản trị viên, Người tham gia. Nút bánh răng để sửa tên, xem thành viên, lấy mã mời, xoá nhóm.</li>
+                          <li>Bài kiểm tra nhóm có mật khẩu: người tạo bấm Bắt đầu thì bài mở, hết giờ tự đóng. Đáp án được lưu tự động nên đóng tab vẫn làm tiếp được. Điểm và đáp án chỉ hiện khi bài kết thúc.</li>
+                          <li>Bảng kết quả bài kiểm tra nhóm: Mã sinh viên, họ tên, điểm thang 10, số câu đúng, số câu sai, thời gian làm. Sắp xếp theo từng cột và xuất CSV.</li>
+                          <li>Tài khoản có thêm Mã sinh viên.</li>
                           <li>Bỏ các ô lồng nhau, mỗi trang chỉ còn một lớp khung nên gọn và đỡ rối mắt hơn.</li>
                           <li>Sửa lỗi chọn môn trên điện thoại nhưng danh sách bài hiện lẫn bài của môn khác.</li>
                           <li>Sửa lỗi nộp bài bị ghi 2 dòng trong lịch sử.</li>
@@ -659,7 +663,7 @@
                         <p><strong>Thông tin đã cập nhật:</strong></p>
                         <ul class="about-list">
                           <li>Thêm mục "12 thì tiếng Anh" trên menu, chia thành 7 trang: bản đồ 12 thì, chi tiết từng thì, máy lắp câu, cặp thì dễ nhầm, chính tả và động từ bất quy tắc, phòng luyện, bộ đề 49 câu.</li>
-                          <li>Sửa lỗi icon "Lớp học" không hiện trên menu điện thoại.</li>
+                          <li>Sửa lỗi icon "Học nhóm" không hiện trên menu điện thoại.</li>
                         </ul>
                       </div>
                     </details>
@@ -669,7 +673,7 @@
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
                         <ul class="about-list">
-                          <li>Thêm tính năng "Lớp học": tạo lớp, mời học sinh tham gia bằng mã, giao bài kiểm tra riêng cho lớp và xem bảng xếp hạng của lớp.</li>
+                          <li>Thêm tính năng "Học nhóm": tạo nhóm, mời người tham gia bằng mã, giao bài kiểm tra riêng cho nhóm và xem bảng xếp hạng của nhóm.</li>
                           <li>Thêm môn học mới: Mạng cáp quang.</li>
                           <li>Thêm nút hiện/ẩn mật khẩu khi đăng nhập, giúp kiểm tra chữ đã gõ trước khi bấm đăng nhập.</li>
                           <li>Cải thiện đăng nhập trên điện thoại, giảm lỗi gõ sai email/mật khẩu.</li>
@@ -785,7 +789,7 @@
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20261104-2"></script>
+    <script type="module" src="./app.js?v=20261104-3"></script>
 
   </body>
 </html>

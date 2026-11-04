@@ -13,11 +13,13 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `style-final-fix.css` | Lớp ghi đè giao diện, nạp sau `style.css` |
 | `theme.css` | Biến màu của giao diện sáng/tối, cỡ chữ, font. Biến `--app-*` dùng chung cho cả 3 mục con trong Shadow DOM |
 | `menu.css` | Menu ngang, Trang chủ (video, chân trang), tab Tiếng Anh, Tùy chỉnh, luật "mỗi trang một lớp khung" |
+| `group.css` | Giao diện Học nhóm, nạp sau `menu.css` |
 | `reset-password.html` / `reset-password.js` | Trang đặt lại mật khẩu từ email |
 | `sw.js` | Service worker (PWA, cache offline) |
 | `manifest.webmanifest` | Khai báo PWA (tên, icon, theme) |
 | `vercel.json` | Rewrite `/reset-password`, header cache |
 | `schema.sql` | Toàn bộ schema + RLS + RPC của Supabase |
+| `migrations/` | Script nâng cấp DB đang chạy. Bản Học nhóm: `2026-11-hoc-nhom.sql`, chạy lại nhiều lần không lỗi |
 | `migrations/` | Thay đổi SQL cho project đã có dữ liệu, chạy riêng trong SQL Editor |
 | `public/favicon.png` | Icon ứng dụng (512x512) |
 | `public/2.png` | Ảnh chữ thương hiệu trên header |
@@ -38,10 +40,9 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 - Lịch sử ôn tập và bảng xếp hạng theo từng môn
 - Tùy chỉnh: giao diện Sáng / Tối / Theo hệ thống, cỡ chữ, font chữ
 - Cài được như app (PWA), dùng lại được khi mất mạng
-- **Lớp học (kiểm tra theo lớp)**: tạo lớp, mời thành viên bằng mã lớp/link,
-  giáo viên tạo bài kiểm tra từ ngân hàng câu hỏi, học sinh làm bài (đáp án
-  không lộ trước khi nộp), hệ thống tự chấm và tổng hợp kết quả tập trung.
-  Xem chi tiết ở mục riêng bên dưới.
+- **Học nhóm**: tạo nhóm, mời bằng mã hoặc link và duyệt từng yêu cầu, bài kiểm tra có mật
+  khẩu từ ngân hàng câu hỏi, người tạo bấm Bắt đầu thì mở, hết giờ tự đóng, hệ thống tự chấm
+  và tổng hợp kết quả. Điểm và đáp án chỉ hiện khi bài kết thúc. Xem mục riêng bên dưới.
 - **12 thì tiếng Anh**: lý thuyết, máy lắp câu, phòng luyện, bộ đề 49 câu.
 - **Tiếng Trung YCT**: học từ vựng YCT 1-4 bằng thẻ có hình. Xem mục riêng bên dưới.
 
@@ -77,36 +78,50 @@ lại từ mặt sau thẻ, hình cắt từ mặt trước (WebP 320px, tổng 
   `vocab_words`: chạy `vocab/vocab-schema.sql` một lần trong Supabase SQL Editor.
   Đổi hình thì tăng `IMG_VERSION` trong `chinese-data.js`.
 
-## Lớp học (kiểm tra theo lớp)
+## Học nhóm
 
-Vào mục **Lớp học** trên menu sau khi đăng nhập.
+Vào mục **Học nhóm** trên menu sau khi đăng nhập. Tên nội bộ vẫn là `classes`, `classState`,
+`#classCard`, `#classContent`, bảng và hàm `class_*`, link mời `?join=MÃ`.
 
-- **Giáo viên/người tạo lớp** (vai trò `admin`): tạo lớp → nhận mã lớp 6 ký
-  tự + link mời (`?join=MÃ`) → quản lý thành viên (nâng/hạ quyền quản trị,
-  xoá thành viên) → tạo bài kiểm tra (chọn môn/bài, số câu, thời gian làm
-  bài, số lượt tối đa) → xem bảng tổng kết real-time (ai đã nộp, điểm bao
-  nhiêu, điểm trung bình lớp).
-- **Học sinh** (vai trò `member`): tham gia lớp bằng mã hoặc bấm link mời →
-  làm bài kiểm tra (chọn đáp án, có thể đổi ý trước khi nộp, không thấy
-  đúng/sai cho tới khi nộp) → xem lại chi tiết bài làm + giải thích sau khi
-  nộp.
+| Hành động | Người tạo nhóm | Quản trị viên | Người tham gia |
+|---|---|---|---|
+| Xem danh sách, vào nhóm, xem lịch sử bài | Có | Có | Có |
+| Sửa tên, xoá nhóm, đổi vai trò, chuyển quyền chủ nhóm | Có | Không | Không |
+| Duyệt, từ chối yêu cầu tham gia, đổi mã mời | Có | Có | Không |
+| Mời khỏi nhóm | Mọi người trừ mình | Chỉ người tham gia | Không |
+| Tạo, bắt đầu, kết thúc sớm, đổi mật khẩu, xoá bài | Có | Có | Không |
+| Xem bảng kết quả, xuất CSV | Có | Có | Không |
+| Làm bài | Không | Không | Có |
+| Rời nhóm | Phải chuyển quyền trước | Có | Có |
 
-Toàn bộ logic nằm trong khối `LỚP HỌC (KIỂM TRA THEO LỚP)` ở `app.js` (UI,
-render động vào `#classContent`) và mục `5. LỚP HỌC` trong `schema.sql`
-(bảng + RLS + 17 hàm RPC). Chi tiết thiết kế đầy đủ (roadmap Phase 2/3, các
-ý tưởng mở rộng) xem file `CLASS_FEATURE_DESIGN.md`.
+Quyền được kiểm tra trong RPC ở server, giao diện chỉ ẩn/hiện nút.
 
-**Giới hạn đã biết của bản Phase 1 này** (không phải lỗi, là phạm vi MVP có
-chủ đích, dự kiến bổ sung ở Phase 2/3):
-- Không lưu nháp câu trả lời giữa chừng: nếu thoát app khi đang làm bài rồi
-  quay lại "Tiếp tục làm", các câu đã chọn trước đó sẽ bị mất (chỉ mất lựa
-  chọn, không mất lượt làm bài - đồng hồ đếm ngược vẫn tính đúng từ lúc bắt
-  đầu thật, không bị "làm mới").
-- Giới hạn thời gian làm bài chỉ được ép buộc phía client (tự nộp khi hết
-  giờ); chưa có cơ chế chặn cứng phía server nếu học sinh submit trễ bằng
-  cách gọi RPC trực tiếp.
-- Chưa có: QR code dạng ảnh (mới có mã + link text), email thông báo, chống
-  gian lận nâng cao (nhiều tab, đổi thiết bị), export Excel/PDF.
+Luồng chính:
+
+- **Tham gia**: nhập mã hoặc mở link `?join=MÃ`, tài khoản chưa có Mã sinh viên thì phải nhập.
+  Yêu cầu ở trạng thái `pending` tới khi được duyệt, mỗi tài khoản tối đa 5 yêu cầu đang chờ.
+- **Bài kiểm tra**: tạo ở trạng thái `draft`, bắt buộc thời gian (1-300 phút) và mật khẩu (4-32
+  ký tự, băm bcrypt trong `class_quiz_secrets`). Bấm Bắt đầu thì `running`, qua `end_at` hoặc bấm
+  Kết thúc sớm thì `closed`. Mỗi nhóm chỉ có một bài đang mở.
+- **Làm bài**: sai mật khẩu 5 lần trong 10 phút thì khoá 5 phút. Đáp án lưu lên server sau 1,5
+  giây (`save_class_quiz_answers`). Tiếp tục làm không hỏi lại mật khẩu.
+- **Chấm**: hàm nội bộ `finalize_class_quiz` chấm các lượt dở theo đáp án đã lưu khi bài kết thúc,
+  gọi lười ở đầu `get_class_quizzes`, `get_class_quiz_results`, `end_class_quiz_session`, không cần
+  pg_cron. Lượt này có `auto_submitted = true`, trên bảng ghi "tự nộp".
+- **Tự cập nhật**: gọi lại server 10 giây một lần lúc xem danh sách hoặc trong nhóm, tab ẩn thì
+  dừng, đang làm bài thì không gọi. Muốn tức thời thì thêm `class_quizzes` vào publication
+  `supabase_realtime` và nghe `postgres_changes` lọc theo `class_id`.
+
+Code nằm ở khối `HỌC NHÓM` trong `app.js`, `group.css`, mục 5 trong `schema.sql`. Thiết kế chi
+tiết xem `CLASS_FEATURE_DESIGN.md`.
+
+**Giới hạn đã biết:**
+
+- Bảng `questions` đọc được bằng token người dùng vì ôn tập cá nhân cần, kể cả cột
+  `correct_answer`. Người biết kỹ thuật có thể tra đáp án theo `question_id` trong lúc làm bài
+  nhóm. Muốn chặn phải đổi luồng ôn tập cá nhân.
+- Chưa có màn cho chủ nhóm xem chi tiết bài làm của từng người.
+- Không có thông báo email, không giám sát chuyển tab.
 
 ## Ghi chú kỹ thuật
 
@@ -133,8 +148,8 @@ chủ đích, dự kiến bổ sung ở Phase 2/3):
 - **Lịch sử làm bài**: `app.js` truy vấn `quiz_attempts` không kèm bộ lọc
   `user_id`, việc mỗi người chỉ thấy lịch sử của mình phụ thuộc hoàn toàn vào
   policy RLS. Đừng tắt RLS trên bảng này.
-- **RLS liên bảng cho Lớp học**: `classes` và `class_members` cần kiểm tra
-  chéo lẫn nhau (ai là chủ lớp / ai là thành viên). Nếu viết policy bằng
+- **RLS liên bảng cho Học nhóm**: `classes` và `class_members` cần kiểm tra
+  chéo lẫn nhau (ai là chủ nhóm / ai là thành viên). Nếu viết policy bằng
   subquery trực tiếp vào bảng kia sẽ bị Postgres báo lỗi "infinite recursion
   detected in policy". Cách khắc phục đã áp dụng: 2 hàm `is_class_owner()` /
   `is_class_member()` (SECURITY DEFINER) dùng trong policy thay vì subquery

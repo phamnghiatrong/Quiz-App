@@ -641,3 +641,10 @@
 #classContent .group-results-note {
   margin-top: 0.75rem;
 }
+
+/* Bánh răng giữ đủ 44px, thắng luật width: auto cho các nút trên màn hẹp ở trên */
+#classContent .group-row-side button.group-gear,
+#classContent .group-head-actions button.group-gear {
+  flex: none;
+  width: 44px !important;
+}
