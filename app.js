@@ -1519,10 +1519,33 @@ function setAuthMode(mode) {
 }
 
 
+// Không để mật khẩu nằm lại trong ô nhập sau khi đăng nhập hoặc đăng xuất: trang không
+// tải lại nên giá trị vẫn còn, người dùng máy chung chỉ cần bấm nút con mắt là đọc được.
+function clearPasswordFields() {
+  ['passwordInput', 'confirmPasswordInput', 'oldPasswordAccount', 'newPasswordAccount', 'confirmPasswordAccount'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.value = '';
+    input.type = 'password';
+  });
+  document.querySelectorAll('.password-toggle-btn[data-password-toggle]').forEach((button) => {
+    button.setAttribute('aria-pressed', 'false');
+    button.setAttribute(
+      'aria-label',
+      button.dataset.passwordToggle === 'confirmPasswordInput' ? 'Hiện mật khẩu nhập lại' : 'Hiện mật khẩu'
+    );
+  });
+}
+
 function updateUserUI(session) {
   const user = session?.user;
+  const previousUserId = currentUserId;
   currentUserId = user?.id || null;
   currentUserDisplayName = user ? 'Đang tải...' : '';
+
+  // Chỉ xoá khi đổi trạng thái đăng nhập. Đăng nhập sai không vào đây nên vẫn giữ để gõ lại,
+  // và lúc mở app (rỗng -> rỗng) không xoá mất chữ người dùng đang gõ.
+  if (previousUserId !== currentUserId) clearPasswordFields();
 
   if (!user) {
     // Không để tài khoản đăng nhập sau thừa hưởng môn đang chọn của tài khoản trước.
@@ -3965,23 +3988,27 @@ async function openTakeQuiz(quizId, quizTitle) {
   }
 }
 
+function paintClassQuizTimer() {
+  const badge = document.getElementById('classQuizTimer');
+  if (!badge || !classState.takeQuizDeadline) return;
+  const totalSec = Math.max(0, Math.floor((classState.takeQuizDeadline - Date.now()) / 1000));
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+  badge.textContent = `${mm}:${ss}`;
+}
+
 function startClassQuizTimer() {
   stopClassQuizTimer();
+  // Mỗi lần chọn đáp án màn hình được vẽ lại: hiện số ngay, không để "--:--" trong 1 giây.
+  paintClassQuizTimer();
   classState.takeQuizTimerId = setInterval(() => {
     if (!classState.takeQuizDeadline) return;
-    const remainMs = classState.takeQuizDeadline - Date.now();
-    if (remainMs <= 0) {
+    if (classState.takeQuizDeadline - Date.now() <= 0) {
       stopClassQuizTimer();
       submitTakeQuiz(true);
       return;
     }
-    const badge = document.getElementById('classQuizTimer');
-    if (badge) {
-      const totalSec = Math.floor(remainMs / 1000);
-      const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
-      const ss = String(totalSec % 60).padStart(2, '0');
-      badge.textContent = `${mm}:${ss}`;
-    }
+    paintClassQuizTimer();
   }, 1000);
 }
 
