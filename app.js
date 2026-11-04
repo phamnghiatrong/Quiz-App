@@ -247,8 +247,11 @@ let loadError = '';
 let isPaused = false;
 let leaderboardData = [];
 
-// quiz mode: practice | exam_30 | exam_70
+// quiz mode: practice | exam_30 | exam_70 | retry_wrong
 let quizMode = null;
+
+// Đang gửi kết quả lên server: chặn nộp lần 2 (xem submitQuiz).
+let isSubmitting = false;
 
 // chọn đề thi thử (chỉ set khi click ô 30/70, chưa bắt đầu làm bài)
 let selectedExamType = null;
@@ -266,9 +269,14 @@ function isAuthed() {
   return Boolean(currentUserId);
 }
 
+// Chỉ thi thử có đồng hồ và nút Tạm dừng. Luyện tập và Làm lại câu sai thì không.
+function isTimedMode(mode) {
+  return mode === 'exam_30' || mode === 'exam_70';
+}
+
 function isInteractionLocked() {
-  // Chỉ khóa tương tác khi đang pause ở chế độ thi thử (practice không dùng pause/timer)
-  return Boolean(isPaused) && quizMode !== 'practice';
+  // Chỉ khóa tương tác khi đang pause ở chế độ có giờ, hoặc đang gửi bài.
+  return isSubmitting || (Boolean(isPaused) && isTimedMode(quizMode));
 }
 
 function isValidUuid(value) {
@@ -760,12 +768,13 @@ function showSection(sectionName) {
   elements.quizSection.hidden = resolved !== 'quiz';
   if (resolved === 'auth') showCaptcha('authCaptcha');
 
+  const showTimerControls = resolved === 'quiz' && isTimedMode(quizMode);
   if (elements.pauseBtn) {
-    elements.pauseBtn.hidden = resolved !== 'quiz';
+    elements.pauseBtn.hidden = !showTimerControls;
   }
 
   if (elements.timerBadge) {
-    elements.timerBadge.hidden = resolved !== 'quiz';
+    elements.timerBadge.hidden = !showTimerControls;
   }
 
   syncQuizLookup(resolved === 'quiz');
@@ -1404,7 +1413,8 @@ function setupMainNav() {
 function leaveQuizIfActive() {
   quizLoadToken += 1;
   isLoading = false;
-  if (!questions.length) return;
+  // Đang gửi bài thì để submitQuiz() tự dọn khi xong, không lưu lại thành bài dở.
+  if (isSubmitting || !questions.length) return;
   pauseQuiz();
   clearQuizState();
 }
@@ -2325,6 +2335,11 @@ function resolveDraftMode(draft) {
   const minutes = Number(draft.durationMinutes || 0);
   if (!minutes) return 'practice';
 
+  // Bản cũ lưu bài "làm lại câu sai" với quizMode rỗng và thời lượng tính theo tỉ lệ.
+  // Thi thử chỉ có 20 hoặc 60 phút, nên giá trị khác là làm lại câu sai, không được
+  // coi là thi thử (thi thử mới được tính điểm bảng xếp hạng).
+  if (minutes !== 20 && minutes !== 60) return 'retry_wrong';
+
   const total = Number(draft.totalQuestions || draft.questions?.length || 0);
   return total >= 70 ? 'exam_70' : 'exam_30';
 }
@@ -2344,10 +2359,10 @@ function syncPausedQuizButtons() {
     elements.examStartBtn.textContent = elements.examStartBtn.dataset.originalLabel;
   }
 
-  if (mode === 'practice') {
+  if (mode === 'practice' || mode === 'retry_wrong') {
     if (elements.practiceContinueBtn) elements.practiceContinueBtn.hidden = false;
     if (elements.practiceStartBtn) elements.practiceStartBtn.textContent = 'Bài luyện tập mới';
-  } else if (mode === 'exam_30' || mode === 'exam_70') {
+  } else if (isTimedMode(mode)) {
     if (elements.examContinueBtn) elements.examContinueBtn.hidden = false;
     if (elements.examStartBtn) elements.examStartBtn.textContent = 'Bài thi thử mới';
   }
@@ -2413,14 +2428,7 @@ function continuePausedQuiz() {
   showSection('quiz');
   if (elements.aboutCard) elements.aboutCard.hidden = true;
 
-  if (mode === 'practice') {
-    stopTimer();
-    if (elements.timerBadge) elements.timerBadge.hidden = true;
-    if (elements.pauseBtn) elements.pauseBtn.hidden = true;
-
-    const lessonText = selectedLesson === 'all' ? 'Tất cả bài/phần' : selectedLesson;
-    elements.quizTitle.textContent = `Luyện tập (${lessonText})`;
-  } else {
+  if (isTimedMode(mode)) {
     if (elements.timerBadge) elements.timerBadge.hidden = false;
     if (elements.pauseBtn) {
       elements.pauseBtn.hidden = false;
@@ -2430,6 +2438,14 @@ function continuePausedQuiz() {
     elements.quizTitle.textContent = `Thi thử ${questionCount} câu / ${durationMinutes} phút`;
     updateTimerDisplay();
     startTimer();
+  } else {
+    stopTimer();
+    if (mode === 'retry_wrong') {
+      elements.quizTitle.textContent = `Làm lại ${questionCount} câu sai`;
+    } else {
+      const lessonText = selectedLesson === 'all' ? 'Tất cả bài/phần' : selectedLesson;
+      elements.quizTitle.textContent = `Luyện tập (${lessonText})`;
+    }
   }
 
   elements.quizStatus.textContent = 'Đã tiếp tục bài làm. Chọn đáp án để xem kết quả ngay lập tức.';
@@ -2465,10 +2481,6 @@ async function startRetryWrongQuiz() {
     return;
   }
 
-  // reset mode để không ảnh hưởng mode lưu lịch sử
-  quizMode = null;
-
-
   const saved = loadLastWrong();
   const ids = saved?.ids;
   if (!Array.isArray(ids) || !ids.length) {
@@ -2476,9 +2488,19 @@ async function startRetryWrongQuiz() {
     return;
   }
 
+  // Làm lại câu sai không tính giờ và không tính điểm bảng xếp hạng.
+  quizMode = 'retry_wrong';
+  currentMode = 'quiz';
   isLoading = true;
   loadError = '';
-  clearDraft();
+  isPaused = false;
+  const loadToken = ++quizLoadToken;
+
+  // Bài thuộc về môn của lần làm trước, không phải môn đang mở trên menu.
+  if (saved.subjectSlug) {
+    selectedSubjectSlug = saved.subjectSlug;
+    confirmedSubjectSlug = saved.subjectSlug;
+  }
 
   elements.quizStatus.textContent = 'Đang tải câu sai...';
   elements.quizCard.innerHTML = '<p class="muted-text">Đang tải câu sai...</p>';
@@ -2489,12 +2511,25 @@ async function startRetryWrongQuiz() {
 
   try {
     const { data, error } = await supabase.from('questions').select('*').in('id', ids);
+
+    // Đã rời màn làm bài trong lúc chờ: bỏ kết quả này.
+    if (loadToken !== quizLoadToken) return;
+
     if (error) throw error;
 
     const fetched = Array.isArray(data) ? data : [];
     if (!fetched.length) {
       throw new Error('Không tìm thấy danh sách câu sai.');
     }
+
+    // Dữ liệu câu sai lưu từ bản cũ có thể thiếu môn: lấy theo câu hỏi.
+    if (!saved.subjectSlug && fetched[0].subject_slug) {
+      selectedSubjectSlug = fetched[0].subject_slug;
+      confirmedSubjectSlug = fetched[0].subject_slug;
+    }
+
+    // Tới đây mới xoá bài cũ của môn này, để lỗi mạng không làm mất bài đang lưu.
+    clearDraft();
 
     const idOrder = new Map(ids.map((id, index) => [id, index]));
     const ordered = fetched.slice().sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
@@ -2506,28 +2541,21 @@ async function startRetryWrongQuiz() {
     quizStartTime = Date.now();
 
     questionCount = questions.length;
-    const prevTotal = Number(saved?.totalQuestions || questionCount);
-    const prevMinutes = Number(saved?.durationMinutes || 20);
-    durationMinutes = Math.max(1, Math.ceil(prevMinutes * (questionCount / Math.max(1, prevTotal))));
-    totalDurationSeconds = durationMinutes * 60;
-
-    isPaused = false;
-    if (elements.pauseBtn) {
-      elements.pauseBtn.hidden = false;
-      elements.pauseBtn.textContent = 'Tạm dừng';
-    }
+    durationMinutes = 0;
+    totalDurationSeconds = 0;
 
     elements.quizTitle.textContent = `Làm lại ${questionCount} câu sai`;
     elements.quizStatus.textContent = 'Chọn đáp án để xem kết quả ngay lập tức.';
-    startTimer();
     renderQuestion();
     saveDraft();
   } catch (error) {
     console.error(error);
+    if (loadToken !== quizLoadToken) return;
+    quizMode = null;
     setStatus(error.message || 'Không thể tải câu sai.', 'error');
     showSection('dashboard');
   } finally {
-    isLoading = false;
+    if (loadToken === quizLoadToken) isLoading = false;
   }
 }
 
@@ -2806,6 +2834,8 @@ function updateNavigationButtons() {
   const atLast = currentQuestionIndex >= questions.length - 1;
   const isAnswered = Boolean(answeredState[currentQuestionIndex]);
   const locked = isInteractionLocked();
+  // Hết giờ mà tự nộp bị lỗi (mất mạng): cho nộp lại ngay, không phải đi tới câu cuối.
+  const timeIsUp = isTimedMode(quizMode) && totalDurationSeconds <= 0;
 
     if (elements.prevQuestionBtn) {
     elements.prevQuestionBtn.disabled = locked || atFirst;
@@ -2815,9 +2845,13 @@ function updateNavigationButtons() {
 
   if (elements.nextQuestionBtn) {
     elements.nextQuestionBtn.hidden = false;
-    elements.nextQuestionBtn.textContent = atLast ? 'Nộp bài' : 'Câu tiếp theo';
+    if (isSubmitting) {
+      elements.nextQuestionBtn.textContent = 'Đang nộp...';
+    } else {
+      elements.nextQuestionBtn.textContent = atLast || timeIsUp ? 'Nộp bài' : 'Câu tiếp theo';
+    }
     // Chỉ cho đi tiếp khi đã trả lời câu hiện tại
-    elements.nextQuestionBtn.disabled = locked || !isAnswered;
+    elements.nextQuestionBtn.disabled = locked || (!isAnswered && !timeIsUp);
   }
 
 
@@ -2980,7 +3014,8 @@ function goToNextQuestion() {
 
 
   const atLast = currentQuestionIndex >= questions.length - 1;
-  if (atLast) {
+  const timeIsUp = isTimedMode(quizMode) && totalDurationSeconds <= 0;
+  if (atLast || timeIsUp) {
     submitQuiz();
     return;
   }
@@ -2993,19 +3028,29 @@ function goToNextQuestion() {
 
 
 async function submitQuiz() {
+  // Chống gửi lặp: nhấn liên tục, hoặc đồng hồ hết giờ đúng lúc đang nộp.
+  if (isSubmitting) return;
+
   if (configError) {
     setStatus(configError, 'error');
     return;
   }
 
   if (!questions.length) return;
-  if (!confirmedSubjectSlug) {
+
+  // Chụp lại ngay từ đầu, vì các biến này có thể đổi trong lúc chờ server.
+  const subjectSlug = confirmedSubjectSlug;
+  const mode = quizMode;
+
+  if (!subjectSlug) {
     setStatus('Không xác định được môn học của bài làm.', 'error');
     return;
   }
 
+  isSubmitting = true;
   isPaused = false;
   stopTimer();
+  updateNavigationButtons();
 
   const totalQuestions = questions.length;
   const correctCount = selectedAnswers.filter(
@@ -3027,19 +3072,19 @@ async function submitQuiz() {
     }
 
     const subject = availableSubjects.find(
-      (item) => item.slug === confirmedSubjectSlug
+      (item) => item.slug === subjectSlug
     );
 
     const payload = {
       user_id: user.id,
-      mode: quizMode || `${totalQuestions} câu / ${durationMinutes} phút`,
+      mode: mode || `${totalQuestions} câu / ${durationMinutes} phút`,
       total_questions: totalQuestions,
       correct_count: correctCount,
       wrong_count: wrongCount,
       score_percent: scorePercent,
       score_points: correctCount,
       duration_seconds: durationSeconds,
-      subject_slug: confirmedSubjectSlug,
+      subject_slug: subjectSlug,
     };
 
     // Chỉ gửi subject_id khi đây là UUID thật lấy từ Supabase.
@@ -3066,7 +3111,7 @@ async function submitQuiz() {
       ids: wrongIds,
       totalQuestions,
       durationMinutes,
-      subjectSlug: confirmedSubjectSlug,
+      subjectSlug,
       createdAt: new Date().toISOString(),
     });
 
@@ -3075,17 +3120,17 @@ async function submitQuiz() {
 
     setStatus('Nộp bài thành công. Kết quả đã được lưu.', 'success');
 
-    clearDraft();
+    clearDraft(subjectSlug, currentUserId);
     pausedQuizDraft = null;
     syncPausedQuizButtons();
     // Bài đã nộp thì xoá khỏi bộ nhớ. Nếu còn, chuyển tab sẽ gọi saveDraft() và tạo lại
     // một "bài đang làm dở" giả, tiếp tục bài đó rồi nộp là ra thêm một dòng lịch sử.
+    const stayedOnQuiz = isQuizVisible();
     clearQuizState();
 
-    // Tải tuần tự để chắc chắn bảng xếp hạng nhận dữ liệu vừa lưu.
-    await loadHistory();
-    await loadLeaderboard();
-    setView('history');
+    // setView('history') tự tải lại Lịch sử. Không tải Bảng xếp hạng ở đây: mở trang đó
+    // từ menu sẽ tải dữ liệu mới. Người dùng đã rời màn làm bài thì không kéo họ đi.
+    if (stayedOnQuiz) setView('history');
   } catch (error) {
     console.error('[submitQuiz] Không thể lưu kết quả:', {
       message: error?.message,
@@ -3098,6 +3143,18 @@ async function submitQuiz() {
       error?.message || 'Không thể lưu kết quả làm bài.',
       'error'
     );
+
+    if (!isQuizVisible()) {
+      // Đã rời màn làm bài trong lúc chờ: bài vẫn còn ở "Bài đang làm dở".
+      clearQuizState();
+    }
+  } finally {
+    isSubmitting = false;
+    // Còn bài (nộp lỗi): trả lại nút để nộp lại, và cho đồng hồ chạy tiếp nếu còn giờ.
+    if (questions.length) {
+      updateNavigationButtons();
+      if (isTimedMode(quizMode) && totalDurationSeconds > 0) startTimer();
+    }
   }
 }
 
@@ -4405,7 +4462,7 @@ function showAppNotice(message) {
 }
 
 function handleAutoSaveAndPause() {
-  if (!questions.length) return;
+  if (isSubmitting || !questions.length) return;
   if (!isPaused) pausedByHide = true;
   isPaused = true;
   stopTimer();
@@ -4439,7 +4496,7 @@ function handleReturnToApp() {
 function resumeAfterHide() {
   pausedByHide = false;
   isPaused = false;
-  const timed = quizMode !== 'practice' && totalDurationSeconds > 0;
+  const timed = isTimedMode(quizMode) && totalDurationSeconds > 0;
   if (timed) {
     if (elements.pauseBtn) elements.pauseBtn.textContent = 'Tạm dừng';
     startTimer();

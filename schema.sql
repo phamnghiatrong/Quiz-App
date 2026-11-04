@@ -255,6 +255,9 @@ $$;
 -- Muốn tính cả bài luyện tập: xoá dòng "and qa.mode in ('exam_30','exam_70')".
 -- Muốn lấy điểm cao nhất của 1 lượt thay vì cộng dồn: đổi sum(...) thành
 --     max(coalesce(qa.correct_count, 0))::bigint as best_score
+--
+-- XẾP HẠNG: mỗi người một hạng riêng, không đồng hạng. Bằng điểm thì ai ít lượt thi
+-- hơn xếp trên, tiếp theo là ai có lượt thi cuối sớm hơn, cuối cùng theo tên.
 drop function if exists public.get_leaderboard();
 drop function if exists public.get_leaderboard(integer);
 drop function if exists public.get_leaderboard(integer, text);
@@ -300,13 +303,15 @@ as $$
   ),
   ranked as (
     select
-      dense_rank() over (order by best_score desc)::bigint as rank,
+      row_number() over (
+        order by best_score desc, attempts asc, latest_attempt asc, full_name asc
+      )::bigint as rank,
       user_id, full_name, best_score, attempts, latest_attempt
     from user_scores
   )
   select r.rank, r.user_id, r.full_name, r.best_score, r.attempts
   from ranked r
-  order by r.rank asc, r.latest_attempt asc, r.full_name asc
+  order by r.rank asc
   limit least(greatest(coalesce(p_limit, 50), 1), 50);
 $$;
 
