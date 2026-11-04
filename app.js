@@ -802,6 +802,9 @@ function setView(viewKey) {
   if (elements.editStudentCodeForm) elements.editStudentCodeForm.hidden = true;
   closeGroupMenu();
   closeGroupDialog();
+  // Rời màn Học nhóm thì dừng gọi server. case 'classes' bên dưới bật lại.
+  groupViewActive = false;
+  stopGroupPolling();
 
   switch (targetView) {
     case 'home':
@@ -839,6 +842,14 @@ function setView(viewKey) {
     case 'classes':
       showSection('dashboard');
       if (elements.classCard) elements.classCard.hidden = false;
+      groupViewActive = true;
+      startGroupPolling();
+      // Đang làm bài dở mà rời sang màn khác: quay lại Học nhóm thì vẫn ở đúng bài đó.
+      if (classState.screen === 'takeQuiz' && classState.attemptId) {
+        classLastHtml = null;
+        renderTakeQuizScreen();
+        break;
+      }
       classState.screen = 'list';
       classSetMessage('');
       loadMyClasses();
@@ -3307,6 +3318,8 @@ const newClassState = () => ({
   attemptId: null,
   takeQuizQuestions: [],
   takeQuizAnswers: {},
+  takeQuizDirty: {}, // Đáp án chọn rồi nhưng chưa lưu lên server
+  takeQuizSaveState: 'idle', // idle | saving | saved | error
   takeQuizIndex: 0,
   takeQuizDeadline: null,
   takeQuizTimerId: null,
@@ -3326,6 +3339,9 @@ const classState = newClassState();
 // Đăng xuất / đổi tài khoản: không để tài khoản sau thấy dữ liệu nhóm của tài khoản trước.
 function resetClassState() {
   stopClassQuizTimer();
+  stopQuizAutosave();
+  stopGroupPolling();
+  classLastHtml = null;
   closeGroupMenu();
   closeGroupDialog();
   const keepJoinCode = classState.joinCodePrefill;
@@ -3364,18 +3380,27 @@ function isGroupManager(role) {
 }
 
 // Vẽ lại nội dung mà không làm mất ô đang focus (người dùng bàn phím, tự làm mới danh sách).
+let classLastHtml = null;
+
 function paintClassContent(html) {
   const root = elements.classContent;
   if (!root) return;
+  // Tự làm mới 10 giây một lần: dữ liệu không đổi thì không đụng DOM (giữ focus, vùng chọn chữ).
+  if (html === classLastHtml) {
+    paintGroupClocks();
+    return;
+  }
+  classLastHtml = html;
   const active = document.activeElement;
   const selector = active && root.contains(active) ? groupFocusSelector(active) : null;
   root.innerHTML = html;
   if (selector) root.querySelector(selector)?.focus({ preventScroll: true });
+  paintGroupClocks();
 }
 
 function groupFocusSelector(el) {
   if (!el?.dataset?.classAction) return null;
-  const attrs = ['classAction', 'classId', 'quizId', 'userId'];
+  const attrs = ['classAction', 'classId', 'quizId', 'userId', 'key'];
   const toAttr = (key) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
   return attrs
     .filter((key) => el.dataset[key])
@@ -3396,6 +3421,82 @@ async function renderClassScreen() {
     default:
       return renderClassListScreen();
   }
+}
+
+// ---------- Đồng hồ và tự cập nhật ---------------------------------------------
+
+// Mọi đồng hồ "Còn mm:ss" tính từ end_at của server + độ lệch server_now so với máy này.
+let classClockOffset = 0;
+let classClockTimerId = null;
+let classClockReloadAt = 0;
+
+function classSyncClock(serverNow) {
+  if (serverNow) classClockOffset = new Date(serverNow).getTime() - Date.now();
+}
+
+function classServerNow() {
+  return Date.now() + classClockOffset;
+}
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function paintGroupClocks() {
+  const now = classServerNow();
+  let expired = false;
+  document.querySelectorAll('#classContent [data-group-end], #groupDialog [data-group-end]').forEach((el) => {
+    const left = new Date(el.dataset.groupEnd).getTime() - now;
+    el.textContent = formatCountdown(left);
+    if (left <= 0 && el.closest('#classContent')) expired = true;
+  });
+  // Về 0 thì tải lại để chuyển sang "Đã kết thúc". Giãn cách để lệch giờ không gây gọi liên tục.
+  if (expired && Date.now() - classClockReloadAt > 3000) {
+    classClockReloadAt = Date.now();
+    groupPollTick();
+  }
+}
+
+// Tự cập nhật khi chủ nhóm bấm Bắt đầu / Kết thúc: gọi lại server 10 giây một lần lúc đang xem danh
+// sách nhóm hoặc trong nhóm, tab ẩn thì dừng, đang làm bài thì không gọi.
+// Sau này muốn tức thời: thêm class_quizzes vào publication supabase_realtime rồi nghe
+// postgres_changes lọc theo class_id (RLS SELECT hiện có đã cho thành viên đọc bảng này).
+const GROUP_POLL_MS = 10000;
+let groupPollTimerId = null;
+let groupViewActive = false;
+
+function startGroupPolling() {
+  stopGroupPolling();
+  if (!groupViewActive || document.hidden) return;
+  groupPollTimerId = setInterval(groupPollTick, GROUP_POLL_MS);
+  classClockTimerId = setInterval(paintGroupClocks, 1000);
+}
+
+function stopGroupPolling() {
+  clearInterval(groupPollTimerId);
+  clearInterval(classClockTimerId);
+  groupPollTimerId = null;
+  classClockTimerId = null;
+}
+
+function groupPollTick() {
+  if (!groupViewActive || document.hidden || !currentUserId) return;
+  // Menu đang mở thì chờ lần sau, vẽ lại lúc này sẽ làm mất nút neo của menu.
+  if (groupMenuState) return;
+  if (classState.screen === 'list') loadMyClasses({ silent: true });
+  else if (classState.screen === 'detail' && classState.classId) refreshClassDetailSilently();
+}
+
+function handleGroupVisibilityChange() {
+  if (document.hidden) {
+    stopGroupPolling();
+    flushQuizSave();
+    return;
+  }
+  if (!groupViewActive) return;
+  startGroupPolling();
+  groupPollTick();
 }
 
 // ---------- Hộp thoại <dialog> dùng chung ------------------------------------
@@ -3638,6 +3739,7 @@ async function loadMyClasses({ silent = false } = {}) {
     if (error) throw error;
     if (userId !== currentUserId) return;
     classState.groups = data || [];
+    classSyncClock(classState.groups[0]?.server_now);
   } catch (err) {
     if (userId !== currentUserId) return;
     if (!silent) {
@@ -3657,7 +3759,9 @@ function groupRowHtml(g) {
   const name = pending
     ? `<span class="group-row-name">${escapeHtml(g.name)}</span>`
     : `<button class="group-row-name group-link" type="button" data-class-action="open-class" data-class-id="${id}">${escapeHtml(g.name)}</button>`;
-  const liveTag = g.has_running_quiz ? '<span class="group-tag is-live">Đang kiểm tra</span>' : '';
+  const liveTag = g.has_running_quiz
+    ? `<span class="group-tag is-live">Đang kiểm tra${g.running_end_at ? ` · Còn <span data-group-end="${escapeHtml(g.running_end_at)}">--:--</span>` : ''}</span>`
+    : '';
 
   let meta;
   if (pending) {
@@ -4035,8 +4139,34 @@ async function fetchClassDetail(classId) {
   const { data, error } = await supabase.rpc('get_class_detail', { p_class_id: classId });
   if (error) throw error;
   const detail = Array.isArray(data) ? data[0] : data;
-  if (!detail) throw new Error('Bạn không còn ở trong nhóm này.');
+  if (!detail) throw Object.assign(new Error('Bạn không còn ở trong nhóm này.'), { code: 'P0001' });
   return detail;
+}
+
+async function refreshClassDetailSilently() {
+  const classId = classState.classId;
+  const userId = currentUserId;
+  try {
+    const [detail, { data: quizzes, error }] = await Promise.all([
+      fetchClassDetail(classId),
+      supabase.rpc('get_class_quizzes', { p_class_id: classId }),
+    ]);
+    if (error) throw error;
+    if (classState.screen !== 'detail' || classState.classId !== classId || userId !== currentUserId) return;
+    classState.classDetail = detail;
+    classState.quizzes = quizzes || [];
+    classSyncClock(classState.quizzes[0]?.server_now);
+    renderClassDetailScreen();
+  } catch (err) {
+    if (classState.screen !== 'detail' || classState.classId !== classId) return;
+    // Server từ chối hẳn (bị mời khỏi nhóm, nhóm đã xoá): về danh sách. Lỗi mạng: lần sau thử lại.
+    if (err?.code === 'P0001') {
+      classState.screen = 'list';
+      classState.classDetail = null;
+      classSetMessage(err.message || 'Bạn không còn ở trong nhóm này.', 'error');
+      loadMyClasses();
+    }
+  }
 }
 
 async function openClassDetail(classId) {
@@ -4057,6 +4187,7 @@ async function openClassDetail(classId) {
     if (quizError) throw quizError;
     classState.classDetail = detail;
     classState.quizzes = quizzes || [];
+    classSyncClock(classState.quizzes[0]?.server_now);
   } catch (err) {
     classSetMessage(err.message || 'Không tải được thông tin nhóm.', 'error');
   } finally {
@@ -4092,16 +4223,71 @@ function renderClassDetailScreen() {
     ${classMessageHtml()}
     <h3 class="group-section-title">Lịch sử</h3>
     ${classState.quizzes.length === 0 && !classState.loading ? '<p class="muted-text">Nhóm chưa có bài kiểm tra nào.</p>' : ''}
-    ${classState.quizzes.length > 0 ? `<ul class="group-list">${classState.quizzes.map(groupQuizRowHtml).join('')}</ul>` : ''}
+    ${classState.quizzes.length > 0 ? `<ul class="group-list">${classState.quizzes.map((q) => groupQuizRowHtml(q, manager)).join('')}</ul>` : ''}
   `);
 }
 
-function groupQuizRowHtml(q) {
+function formatScore10(value) {
+  if (value === null || value === undefined || value === '') return '-';
+  return Number(value).toFixed(2).replace('.', ',');
+}
+
+function groupClockHtml(endAt) {
+  return `<span class="group-tag is-live">Còn <span data-group-end="${escapeHtml(endAt)}">--:--</span></span>`;
+}
+
+// Trạng thái và nút theo từng vai trò. Giao diện chỉ ẩn/hiện, server vẫn kiểm tra lại quyền.
+function groupQuizStateHtml(q, manager) {
+  const id = escapeHtml(q.quiz_id);
+  const btn = (cls, action, label) => `<button class="${cls}" type="button" data-class-action="${action}" data-quiz-id="${id}">${escapeHtml(label)}</button>`;
+  const remove = btn('ghost-btn group-btn-danger', 'delete-quiz', 'Xoá');
+
+  if (q.status === 'draft') {
+    if (!manager) return '<span class="group-tag">Chưa bắt đầu</span>';
+    return `
+      <span class="group-tag">Chưa bắt đầu</span>
+      ${btn('primary-btn', 'start-quiz', 'Bắt đầu')}
+      ${btn('ghost-btn', 'change-quiz-password', 'Đổi mật khẩu')}
+      ${remove}
+    `;
+  }
+  if (q.status === 'running') {
+    if (manager) return `${groupClockHtml(q.end_at)}${btn('ghost-btn group-btn-danger', 'end-quiz', 'Kết thúc sớm')}`;
+    const attemptsLeft = Number(q.max_attempts || 1) - Number(q.my_attempts || 0);
+    if (q.my_status === 'in_progress') return `${groupClockHtml(q.end_at)}${btn('primary-btn', 'take-quiz', 'Tiếp tục làm')}`;
+    if (q.my_status === 'submitted') {
+      return `
+        ${groupClockHtml(q.end_at)}
+        <span class="group-state-text">Đã nộp, kết quả hiện khi bài kết thúc</span>
+        ${attemptsLeft > 0 ? btn('ghost-btn', 'take-quiz', `Làm lại (còn ${attemptsLeft} lượt)`) : ''}
+      `;
+    }
+    return `${groupClockHtml(q.end_at)}${btn('primary-btn', 'take-quiz', 'Làm bài')}`;
+  }
+  // Đã kết thúc
+  if (manager) return `<span class="group-tag">Đã kết thúc</span>${btn('primary-btn', 'view-results', 'Bảng kết quả')}${remove}`;
+  if (!q.my_attempt_id) return '<span class="group-state-text">Không làm bài</span>';
+  return `
+    <span class="group-state-text">Điểm <strong>${escapeHtml(formatScore10(q.my_score10))}</strong> · Đúng ${Number(q.my_correct || 0)}/${Number(q.my_total || 0)}${q.my_auto ? ' · tự nộp' : ''}</span>
+    ${btn('ghost-btn', 'review-quiz', 'Xem lại bài')}
+  `;
+}
+
+function groupQuizRowHtml(q, manager) {
+  const parts = [];
+  if (q.subject_slug) parts.push(getSubjectName(q.subject_slug));
+  if (q.lesson) parts.push(q.lesson);
+  parts.push(`${Number(q.question_count || 0)} câu`);
+  if (q.time_limit_minutes) parts.push(`${Number(q.time_limit_minutes)} phút`);
+  if (q.status === 'closed' && q.start_at) parts.push(new Date(q.start_at).toLocaleDateString('vi-VN'));
+  if (manager && q.status === 'closed') parts.push(`Đã nộp ${Number(q.submitted_count || 0)}/${Number(q.total_members || 0)}`);
   return `
     <li class="group-row">
       <div class="group-row-main">
         <div class="group-row-title"><span class="group-row-name">${escapeHtml(q.title)}</span></div>
+        <p class="group-row-meta">${parts.map(escapeHtml).join(' · ')}</p>
       </div>
+      <div class="group-row-side group-quiz-state">${groupQuizStateHtml(q, manager)}</div>
     </li>
   `;
 }
@@ -4323,25 +4509,32 @@ function groupBackFromSub() {
   }
 }
 
-// ---------- 4. Tạo bài kiểm tra (admin) ---------------------------------------
+// ---------- 6. Tạo bài kiểm tra (chủ nhóm, quản trị viên) ----------------------
 
 async function showCreateQuizForm(classId, returnTo = 'detail') {
   classState.classId = classId;
   classState.returnTo = returnTo;
   classState.screen = 'createQuiz';
-  classState.classDetail = await fetchClassDetail(classId).catch(() => classState.classDetail);
   classState.lessonsForQuiz = [];
+  classSetMessage('');
+  try {
+    classState.classDetail = await fetchClassDetail(classId);
+  } catch (err) {
+    classSetMessage(err.message || 'Không tải được thông tin nhóm.', 'error');
+    classState.screen = 'list';
+    loadMyClasses();
+    return;
+  }
   renderCreateQuizForm();
   const subjectSlug = classState.classDetail?.subject_slug;
-  if (subjectSlug) {
-    try {
-      const { data } = await supabase.rpc('get_lessons', { p_subject_slug: subjectSlug });
-      classState.lessonsForQuiz = data || [];
-    } catch {
-      classState.lessonsForQuiz = [];
-    }
-    renderCreateQuizForm();
-  }
+  if (subjectSlug) await loadQuizLessons(subjectSlug);
+}
+
+function quizLessonOptionsHtml() {
+  return `
+    <option value="">Tất cả các bài</option>
+    ${classState.lessonsForQuiz.map((l) => `<option value="${escapeHtml(l.lesson)}">${escapeHtml(l.lesson)} (${Number(l.question_count)} câu)</option>`).join('')}
+  `;
 }
 
 function renderCreateQuizForm() {
@@ -4349,182 +4542,342 @@ function renderCreateQuizForm() {
   const subjectOptions = availableSubjects.map((s) =>
     `<option value="${escapeHtml(s.slug)}" ${s.slug === d?.subject_slug ? 'selected' : ''}>${escapeHtml(s.name)}</option>`
   ).join('');
-  const lessonOptions = classState.lessonsForQuiz.map((l) =>
-    `<option value="${escapeHtml(l.lesson)}">${escapeHtml(l.lesson)} (${Number(l.question_count)} câu)</option>`
-  ).join('');
 
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Lớp học</p>
-        <h3>Tạo bài kiểm tra</h3>
-      </div>
-      <button class="ghost-btn" type="button" data-class-action="back-detail">← Quay lại lớp</button>
+  paintClassContent(`
+    <div class="group-head">
+      <button class="ghost-btn" type="button" data-class-action="back-from-sub">${classState.returnTo === 'list' ? '← Danh sách nhóm' : '← Quay lại nhóm'}</button>
     </div>
-    ${classMessageHtml()}
-    <form class="auth-form" data-class-form="createQuiz">
+    <div class="group-head">
+      <h2>Tạo bài kiểm tra${d ? ` - ${escapeHtml(d.name)}` : ''}</h2>
+    </div>
+    <form class="auth-form group-quiz-form" data-class-form="createQuiz" novalidate>
       <label for="quizTitleInput">Tên bài kiểm tra</label>
-      <input id="quizTitleInput" name="title" type="text" placeholder="VD: Kiểm tra 15 phút - Bài 1" required />
+      <input id="quizTitleInput" name="title" type="text" maxlength="120" autocomplete="off" placeholder="VD: Kiểm tra 15 phút - Bài 1" />
 
       <label for="quizDescInput">Mô tả (không bắt buộc)</label>
-      <input id="quizDescInput" name="description" type="text" />
+      <input id="quizDescInput" name="description" type="text" maxlength="200" autocomplete="off" />
 
       <label for="quizSubjectInput">Môn học</label>
       <select id="quizSubjectInput" name="subject_slug" data-class-onchange="quiz-subject">
-        <option value="">-- Chọn môn --</option>
+        <option value="">Chọn môn</option>
         ${subjectOptions}
       </select>
 
       <label for="quizLessonInput">Bài / phần (không bắt buộc)</label>
-      <select id="quizLessonInput" name="lesson">
-        <option value="">-- Tất cả các bài --</option>
-        ${lessonOptions}
-      </select>
+      <select id="quizLessonInput" name="lesson">${quizLessonOptionsHtml()}</select>
 
       <label for="quizCountInput">Số câu hỏi</label>
-      <input id="quizCountInput" name="question_count" type="number" min="1" max="200" value="10" required />
+      <input id="quizCountInput" name="question_count" type="number" min="1" max="200" value="10" />
 
-      <label for="quizTimeInput">Thời gian làm bài (phút, để trống = không giới hạn)</label>
-      <input id="quizTimeInput" name="time_limit_minutes" type="number" min="1" max="300" />
+      <label for="quizTimeInput">Thời gian làm bài (phút)</label>
+      <input id="quizTimeInput" name="time_limit_minutes" type="number" min="1" max="300" placeholder="Từ 1 đến 300" />
 
       <label for="quizAttemptsInput">Số lượt làm bài tối đa</label>
-      <input id="quizAttemptsInput" name="max_attempts" type="number" min="1" max="10" value="1" required />
+      <input id="quizAttemptsInput" name="max_attempts" type="number" min="1" max="10" value="1" />
 
-      <button class="primary-btn" type="submit" ${classState.loading ? 'disabled' : ''}>Tạo bài kiểm tra</button>
+      ${groupPasswordInputHtml('quizPasswordInput', 'Mật khẩu bài kiểm tra', 'maxlength="32"')}
+      ${groupPasswordInputHtml('quizPasswordConfirmInput', 'Nhập lại mật khẩu', 'maxlength="32"')}
+      <p class="group-hint group-form-note">Đọc mật khẩu cho người tham gia khi bắt đầu. Mật khẩu được mã hoá, quên thì đặt lại bằng Đổi mật khẩu.</p>
+
+      <p class="group-form-note group-form-msg error" id="createQuizMsg" aria-live="polite" hidden></p>
+      <div class="group-form-note">
+        <button class="primary-btn" type="submit">Tạo bài kiểm tra</button>
+      </div>
     </form>
-  `;
+  `);
 }
 
-async function handleCreateQuizSubjectChange(select) {
-  const subjectSlug = select.value;
-  if (!subjectSlug) {
-    classState.lessonsForQuiz = [];
-    renderCreateQuizForm();
-    return;
-  }
+// Chỉ thay danh sách bài trong ô chọn, không vẽ lại cả form để giữ chữ người dùng đã gõ.
+async function loadQuizLessons(subjectSlug) {
   try {
     const { data } = await supabase.rpc('get_lessons', { p_subject_slug: subjectSlug });
     classState.lessonsForQuiz = data || [];
   } catch {
     classState.lessonsForQuiz = [];
   }
-  renderCreateQuizForm();
+  const select = document.getElementById('quizLessonInput');
+  if (select) select.innerHTML = quizLessonOptionsHtml();
+}
+
+function handleCreateQuizSubjectChange(select) {
+  const subjectSlug = select.value;
+  if (!subjectSlug) {
+    classState.lessonsForQuiz = [];
+    const lesson = document.getElementById('quizLessonInput');
+    if (lesson) lesson.innerHTML = quizLessonOptionsHtml();
+    return;
+  }
+  loadQuizLessons(subjectSlug);
+}
+
+function quizPasswordError(password, confirm) {
+  if (!password) return 'Vui lòng nhập mật khẩu bài kiểm tra.';
+  if (password.length < 4 || password.length > 32) return 'Mật khẩu bài kiểm tra phải có từ 4 đến 32 ký tự.';
+  if (password !== confirm) return 'Mật khẩu nhập lại không khớp.';
+  return '';
 }
 
 async function handleCreateQuizSubmit(form) {
-  const title = form.querySelector('#quizTitleInput')?.value?.trim();
-  const description = form.querySelector('#quizDescInput')?.value?.trim();
-  const subjectSlug = form.querySelector('#quizSubjectInput')?.value?.trim();
-  const lesson = form.querySelector('#quizLessonInput')?.value?.trim();
-  const count = parseInt(form.querySelector('#quizCountInput')?.value, 10) || 10;
-  const timeLimitRaw = form.querySelector('#quizTimeInput')?.value?.trim();
-  const timeLimit = timeLimitRaw ? parseInt(timeLimitRaw, 10) : null;
-  const maxAttempts = parseInt(form.querySelector('#quizAttemptsInput')?.value, 10) || 1;
+  const msg = form.querySelector('#createQuizMsg');
+  const submitBtn = form.querySelector('[type="submit"]');
+  const fail = (text) => {
+    msg.textContent = text;
+    msg.hidden = !text;
+  };
+  const title = form.querySelector('#quizTitleInput').value.trim();
+  const description = form.querySelector('#quizDescInput').value.trim();
+  const subjectSlug = form.querySelector('#quizSubjectInput').value.trim();
+  const lesson = form.querySelector('#quizLessonInput').value.trim();
+  const count = parseInt(form.querySelector('#quizCountInput').value, 10);
+  const timeLimit = parseInt(form.querySelector('#quizTimeInput').value, 10);
+  const maxAttempts = parseInt(form.querySelector('#quizAttemptsInput').value, 10);
+  const password = form.querySelector('#quizPasswordInput').value;
+  const confirm = form.querySelector('#quizPasswordConfirmInput').value;
 
-  if (!title) {
-    classSetMessage('Vui lòng nhập tên bài kiểm tra.', 'error');
-    renderCreateQuizForm();
-    return;
-  }
+  if (!title) return fail('Vui lòng nhập tên bài kiểm tra.');
+  if (!subjectSlug) return fail('Vui lòng chọn môn học.');
+  if (!Number.isInteger(count) || count < 1 || count > 200) return fail('Số câu hỏi phải từ 1 đến 200.');
+  if (!Number.isInteger(timeLimit) || timeLimit < 1 || timeLimit > 300) return fail('Thời gian làm bài phải từ 1 đến 300 phút.');
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) return fail('Số lượt làm bài phải từ 1 đến 10.');
+  const passwordError = quizPasswordError(password, confirm);
+  if (passwordError) return fail(passwordError);
 
-  classState.loading = true;
-  classSetMessage('');
-  renderCreateQuizForm();
+  fail('');
+  submitBtn.disabled = true;
   try {
     const { data, error } = await supabase.rpc('create_class_quiz', {
       p_class_id: classState.classId,
       p_title: title,
       p_description: description || null,
-      p_subject_slug: subjectSlug || null,
+      p_subject_slug: subjectSlug,
       p_lesson: lesson || null,
       p_question_count: count,
       p_time_limit_minutes: timeLimit,
       p_max_attempts: maxAttempts,
-      p_start_at: null,
-      p_end_at: null,
+      p_password: password,
     });
     if (error) throw error;
-    classSetMessage(`Đã tạo bài kiểm tra "${data.title}" với ${data.question_count} câu hỏi.`, 'success');
-    classState.loading = false;
+    classSetMessage(`Đã tạo bài kiểm tra ${data.title} với ${data.question_count} câu. Bấm Bắt đầu khi muốn mở bài.`, 'success');
     await openClassDetail(classState.classId);
   } catch (err) {
-    classSetMessage(err.message || 'Không tạo được bài kiểm tra.', 'error');
-    classState.loading = false;
-    renderCreateQuizForm();
+    fail(err.message || 'Không tạo được bài kiểm tra.');
+    submitBtn.disabled = false;
   }
 }
 
-async function handleDeleteQuiz(quizId) {
-  if (!window.confirm('Xoá bài kiểm tra này? Toàn bộ bài làm liên quan sẽ bị xoá.')) return;
+// ---------- 7. Bắt đầu, kết thúc, đổi mật khẩu, xoá bài -------------------------
+
+function formatClockTime(ms) {
+  return new Date(ms).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function classQuizById(quizId) {
+  return classState.quizzes.find((q) => q.quiz_id === quizId);
+}
+
+function openStartQuizDialog(quiz) {
+  const minutes = Number(quiz.time_limit_minutes);
+  const closeAt = formatClockTime(classServerNow() + minutes * 60000);
+  openGroupDialog({
+    title: `Bắt đầu: ${quiz.title}`,
+    submitLabel: 'Bắt đầu',
+    bodyHtml: `
+      <p>Bài mở ngay và tự đóng lúc <strong>${escapeHtml(closeAt)}</strong> (sau ${minutes} phút).</p>
+      <p class="group-hint">Đọc mật khẩu cho người tham gia sau khi bắt đầu.</p>
+    `,
+    onSubmit: async () => {
+      const { error } = await supabase.rpc('start_class_quiz_session', { p_quiz_id: quiz.quiz_id });
+      if (error) throw error;
+      classSetMessage(`Đã bắt đầu bài ${quiz.title}.`, 'success');
+      openClassDetail(classState.classId);
+    },
+  });
+}
+
+async function handleEndQuiz(quiz) {
+  const ok = await groupConfirm({
+    title: 'Kết thúc sớm',
+    message: `Kết thúc bài ${quiz.title} ngay bây giờ? Lượt đang làm dở sẽ được chấm theo đáp án đã lưu.`,
+    confirmLabel: 'Kết thúc sớm',
+    danger: true,
+  });
+  if (!ok) return;
   try {
-    const { error } = await supabase.rpc('delete_class_quiz', { p_quiz_id: quizId });
+    const { error } = await supabase.rpc('end_class_quiz_session', { p_quiz_id: quiz.quiz_id });
     if (error) throw error;
-    await openClassDetail(classState.classId);
+    classSetMessage(`Đã kết thúc bài ${quiz.title}.`, 'success');
+  } catch (err) {
+    classSetMessage(err.message || 'Không kết thúc được bài kiểm tra.', 'error');
+  }
+  openClassDetail(classState.classId);
+}
+
+function openChangeQuizPasswordDialog(quiz) {
+  openGroupDialog({
+    title: `Đổi mật khẩu: ${quiz.title}`,
+    submitLabel: 'Lưu mật khẩu',
+    bodyHtml: `
+      ${groupPasswordInputHtml('quizNewPasswordInput', 'Mật khẩu mới', 'maxlength="32"')}
+      ${groupPasswordInputHtml('quizNewPasswordConfirmInput', 'Nhập lại mật khẩu', 'maxlength="32"')}
+    `,
+    onSubmit: async (api) => {
+      const password = api.form.querySelector('#quizNewPasswordInput').value;
+      const confirm = api.form.querySelector('#quizNewPasswordConfirmInput').value;
+      const problem = quizPasswordError(password, confirm);
+      if (problem) {
+        api.setMessage(problem);
+        return false;
+      }
+      const { error } = await supabase.rpc('set_class_quiz_password', { p_quiz_id: quiz.quiz_id, p_password: password });
+      if (error) throw error;
+      classSetMessage(`Đã đổi mật khẩu bài ${quiz.title}.`, 'success');
+      renderClassDetailScreen();
+    },
+  });
+}
+
+async function handleDeleteQuiz(quiz) {
+  const ok = await groupConfirm({
+    title: 'Xoá bài kiểm tra',
+    message: `Xoá bài ${quiz.title}? Toàn bộ bài làm và kết quả của bài này sẽ bị xoá vĩnh viễn.`,
+    confirmLabel: 'Xoá bài',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const { error } = await supabase.rpc('delete_class_quiz', { p_quiz_id: quiz.quiz_id });
+    if (error) throw error;
+    classSetMessage(`Đã xoá bài ${quiz.title}.`, 'success');
   } catch (err) {
     classSetMessage(err.message || 'Không xoá được bài kiểm tra.', 'error');
-    renderClassDetailScreen();
+  }
+  openClassDetail(classState.classId);
+}
+
+// ---------- 8. Làm bài (người tham gia) -----------------------------------------
+
+function handleTakeQuiz(quiz) {
+  // Tiếp tục lượt đang dở không hỏi lại mật khẩu, server cũng bỏ qua mật khẩu trong trường hợp này.
+  if (quiz.my_status === 'in_progress') {
+    resumeQuizAttempt(quiz);
+    return;
+  }
+  openQuizPasswordDialog(quiz);
+}
+
+async function resumeQuizAttempt(quiz) {
+  classSetMessage('');
+  paintClassContent('<p class="muted-text">Đang tải câu hỏi...</p>');
+  try {
+    const { data, error } = await supabase.rpc('start_class_quiz_attempt', { p_class_quiz_id: quiz.quiz_id });
+    if (error) throw error;
+    const first = data?.[0];
+    // Lượt dở đã bị chấm trong lúc chưa tải lại: server đòi mật khẩu cho lượt mới, hỏi như bình thường.
+    if (first?.error_code) {
+      await openClassDetail(classState.classId);
+      openQuizPasswordDialog(quiz);
+      return;
+    }
+    await beginTakeQuiz(quiz, data);
+  } catch (err) {
+    classSetMessage(err.message || 'Không mở được bài kiểm tra.', 'error');
+    await openClassDetail(classState.classId);
   }
 }
 
-// ---------- 5. Làm bài kiểm tra (học sinh) ------------------------------------
+function openQuizPasswordDialog(quiz) {
+  let lockTimer = null;
+  const endAt = new Date(quiz.end_at).getTime();
+  openGroupDialog({
+    title: `Làm bài: ${quiz.title}`,
+    submitLabel: 'Vào làm bài',
+    bodyHtml: `
+      <p>Bài đóng lúc <strong>${escapeHtml(formatClockTime(endAt))}</strong>, còn <span data-group-end="${escapeHtml(quiz.end_at)}">--:--</span>.</p>
+      ${groupPasswordInputHtml('quizEnterPasswordInput', 'Mật khẩu bài kiểm tra', 'maxlength="32"')}
+    `,
+    onOpen: () => paintGroupClocks(),
+    onClose: () => clearInterval(lockTimer),
+    onSubmit: async (api) => {
+      const input = api.form.querySelector('#quizEnterPasswordInput');
+      const password = input.value;
+      if (!password) {
+        api.setMessage('Vui lòng nhập mật khẩu.');
+        return false;
+      }
+      const { data, error } = await supabase.rpc('start_class_quiz_attempt', {
+        p_class_quiz_id: quiz.quiz_id,
+        p_password: password,
+      });
+      if (error) throw error;
+      const first = data?.[0];
+      if (first?.error_code === 'wrong_password') {
+        api.setMessage(`Mật khẩu không đúng (còn ${Number(first.tries_left)} lần thử)`);
+        input.select();
+        return false;
+      }
+      if (first?.error_code === 'locked') {
+        // Khoá ở server. Đếm ngược ở đây chỉ để người dùng biết khi nào thử lại được.
+        const unlockAt = Date.now() + Number(first.retry_after_seconds || 0) * 1000;
+        api.submitBtn.dataset.locked = '1';
+        api.submitBtn.disabled = true;
+        const tick = () => {
+          const left = unlockAt - Date.now();
+          if (left <= 0) {
+            clearInterval(lockTimer);
+            delete api.submitBtn.dataset.locked;
+            api.submitBtn.disabled = false;
+            api.setMessage('Bạn có thể thử lại.', 'success');
+            return;
+          }
+          api.setMessage(`Bạn đã nhập sai quá nhiều lần. Thử lại sau ${formatCountdown(left)}.`);
+        };
+        clearInterval(lockTimer);
+        lockTimer = setInterval(tick, 1000);
+        tick();
+        return false;
+      }
+      if (first?.error_code) {
+        api.setMessage('Vui lòng nhập mật khẩu.');
+        return false;
+      }
+      api.close();
+      await beginTakeQuiz(quiz, data);
+      return undefined;
+    },
+  });
+}
 
-async function openTakeQuiz(quizId, quizTitle) {
+// Đồng hồ theo deadline_at + server_now của server, như các màn khác trong Học nhóm.
+async function beginTakeQuiz(quiz, rows) {
+  if (!rows || !rows.length) throw new Error('Bài kiểm tra không có câu hỏi.');
+  const first = rows[0];
+  classSyncClock(first.server_now);
   classState.screen = 'takeQuiz';
-  classState.quizId = quizId;
-  classState.takeQuizTitle = quizTitle || '';
+  classState.quizId = quiz.quiz_id;
+  classState.takeQuizTitle = quiz.title || '';
+  classState.attemptId = first.attempt_id;
+  classState.takeQuizQuestions = rows;
   classState.takeQuizIndex = 0;
   classState.takeQuizAnswers = {};
+  rows.forEach((row) => {
+    if (row.saved_answer) classState.takeQuizAnswers[row.question_id] = row.saved_answer;
+  });
+  classState.takeQuizDirty = {};
+  classState.takeQuizSaveState = 'idle';
   classSetMessage('');
-  elements.classContent.innerHTML = `<p class="muted-text">Đang tải câu hỏi...</p>`;
-  try {
-    const { data, error } = await supabase.rpc('start_class_quiz_attempt', { p_class_quiz_id: quizId });
-    if (error) throw error;
-    if (!data || !data.length) throw new Error('Bài kiểm tra không có câu hỏi.');
-    classState.attemptId = data[0].attempt_id;
-    classState.takeQuizQuestions = data;
-
-    // Hạn nộp do SERVER tính (deadline_at = sớm hơn giữa started_at + số phút
-    // và giờ đóng bài end_at). Server cũng trả server_now để bù lệch đồng hồ
-    // của máy học sinh. Server tự từ chối đáp án nộp quá hạn + 2 phút ân hạn.
-    const { deadline_at: deadlineAt, server_now: serverNow } = data[0];
-    const timeLimitMinutes = data[0].time_limit_minutes;
-    const startedAt = data[0].started_at;
-    let deadline = null;
-    if (deadlineAt) {
-      const clockOffset = serverNow ? new Date(serverNow).getTime() - Date.now() : 0;
-      deadline = new Date(deadlineAt).getTime() - clockOffset;
-    } else if (timeLimitMinutes && startedAt && deadlineAt === undefined) {
-      // Dự phòng khi server chưa có cột deadline_at (phiên bản RPC cũ).
-      deadline = new Date(startedAt).getTime() + timeLimitMinutes * 60 * 1000;
-    }
-    if (deadline) {
-      classState.takeQuizDeadline = deadline;
-      if (classState.takeQuizDeadline <= Date.now()) {
-        // Hết giờ ngay khi mở lại (đã quá hạn từ trước) -> nộp bài luôn.
-        stopClassQuizTimer();
-        renderTakeQuizScreen();
-        await submitTakeQuiz(true);
-        return;
-      }
-      startClassQuizTimer();
-    } else {
-      classState.takeQuizDeadline = null;
-    }
+  classState.takeQuizDeadline = new Date(first.deadline_at).getTime() - classClockOffset;
+  if (classState.takeQuizDeadline <= Date.now()) {
     renderTakeQuizScreen();
-  } catch (err) {
-    classState.screen = 'detail';
-    classSetMessage(err.message || 'Không bắt đầu được bài kiểm tra.', 'error');
-    renderClassDetailScreen();
+    await submitTakeQuiz(true);
+    return;
   }
+  renderTakeQuizScreen();
 }
 
 function paintClassQuizTimer() {
   const badge = document.getElementById('classQuizTimer');
   if (!badge || !classState.takeQuizDeadline) return;
-  const totalSec = Math.max(0, Math.floor((classState.takeQuizDeadline - Date.now()) / 1000));
-  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
-  const ss = String(totalSec % 60).padStart(2, '0');
-  badge.textContent = `${mm}:${ss}`;
+  badge.textContent = formatCountdown(classState.takeQuizDeadline - Date.now());
 }
 
 function startClassQuizTimer() {
@@ -4549,6 +4902,20 @@ function stopClassQuizTimer() {
   }
 }
 
+function quizSaveStatusText() {
+  switch (classState.takeQuizSaveState) {
+    case 'saving': return 'Đang lưu...';
+    case 'saved': return 'Đã lưu đáp án.';
+    case 'error': return 'Chưa lưu được, đang thử lại...';
+    default: return '';
+  }
+}
+
+function paintQuizSaveStatus() {
+  const el = document.getElementById('classQuizSaveStatus');
+  if (el) el.textContent = quizSaveStatusText();
+}
+
 function renderTakeQuizScreen() {
   const questions = classState.takeQuizQuestions;
   const idx = classState.takeQuizIndex;
@@ -4565,15 +4932,17 @@ function renderTakeQuizScreen() {
   const answeredCount = Object.keys(classState.takeQuizAnswers).length;
   const isLast = idx === questions.length - 1;
 
-  elements.classContent.innerHTML = `
+  paintClassContent(`
     <div class="quiz-header">
       <div>
-        <p class="eyebrow">Đang làm bài kiểm tra lớp</p>
+        <p class="eyebrow">Đang làm bài kiểm tra nhóm</p>
         <h3>${escapeHtml(classState.takeQuizTitle)}</h3>
       </div>
-      ${classState.takeQuizDeadline ? `<div class="timer-badge" id="classQuizTimer">--:--</div>` : ''}
+      ${classState.takeQuizDeadline ? '<div class="timer-badge" id="classQuizTimer">--:--</div>' : ''}
     </div>
-    <p class="muted-text">Đã trả lời ${answeredCount}/${questions.length} câu. Đáp án chỉ hiện sau khi bạn nộp bài.</p>
+    ${classMessageHtml()}
+    <p class="muted-text">Đã trả lời ${answeredCount}/${questions.length} câu. Kết quả và đáp án chỉ hiện sau khi bài kết thúc.
+      <span class="group-save-status" id="classQuizSaveStatus" aria-live="polite">${escapeHtml(quizSaveStatusText())}</span></p>
     <div class="quiz-card">
       <p class="question-index">Câu ${idx + 1}/${questions.length}</p>
       <p class="question-text">${escapeHtml(q.question_text || '')}</p>
@@ -4587,10 +4956,10 @@ function renderTakeQuizScreen() {
     </div>
     <div class="quiz-actions">
       <button class="ghost-btn" type="button" data-class-action="quiz-prev" ${idx === 0 ? 'disabled' : ''}>Câu trước</button>
-      ${!isLast ? `<button class="primary-btn" type="button" data-class-action="quiz-next">Câu tiếp theo</button>` : ''}
-      ${isLast ? `<button class="primary-btn" type="button" data-class-action="quiz-submit">Nộp bài</button>` : ''}
+      ${!isLast ? '<button class="primary-btn" type="button" data-class-action="quiz-next">Câu tiếp theo</button>' : ''}
+      ${isLast ? '<button class="primary-btn" type="button" data-class-action="quiz-submit">Nộp bài</button>' : ''}
     </div>
-  `;
+  `);
   if (classState.takeQuizDeadline) startClassQuizTimer();
 }
 
@@ -4598,6 +4967,8 @@ function handleSelectAnswer(key) {
   const q = classState.takeQuizQuestions[classState.takeQuizIndex];
   if (!q) return;
   classState.takeQuizAnswers[q.question_id] = key;
+  classState.takeQuizDirty[q.question_id] = key;
+  scheduleQuizSave();
   renderTakeQuizScreen();
 }
 
@@ -4615,58 +4986,179 @@ function handleQuizNext() {
   }
 }
 
+// Lưu đáp án lên server: gom các lần chọn trong 1,5 giây rồi gửi một lần. Mất mạng thì giữ lại,
+// thử lại sau. Nếu không kịp nộp, server vẫn chấm theo đáp án đã lưu khi bài kết thúc.
+const QUIZ_SAVE_DEBOUNCE_MS = 1500;
+const QUIZ_SAVE_RETRY_MS = 5000;
+let quizSaveTimer = null;
+let quizSaveRunning = false;
+
+function scheduleQuizSave(delay = QUIZ_SAVE_DEBOUNCE_MS) {
+  clearTimeout(quizSaveTimer);
+  quizSaveTimer = setTimeout(flushQuizSave, delay);
+}
+
+function stopQuizAutosave() {
+  clearTimeout(quizSaveTimer);
+  quizSaveTimer = null;
+}
+
+async function flushQuizSave() {
+  stopQuizAutosave();
+  if (quizSaveRunning || !classState.attemptId) return;
+  const attemptId = classState.attemptId;
+  const payload = classState.takeQuizDirty;
+  if (!payload || Object.keys(payload).length === 0) return;
+  classState.takeQuizDirty = {};
+  quizSaveRunning = true;
+  classState.takeQuizSaveState = 'saving';
+  paintQuizSaveStatus();
+  try {
+    const { error } = await supabase.rpc('save_class_quiz_answers', { p_attempt_id: attemptId, p_answers: payload });
+    if (error) throw error;
+    if (classState.attemptId === attemptId) {
+      classState.takeQuizSaveState = 'saved';
+      paintQuizSaveStatus();
+    }
+  } catch (err) {
+    if (classState.attemptId === attemptId) {
+      if (err?.code === 'P0001') {
+        // Server từ chối hẳn (bài đã kết thúc hoặc đã bị chấm): thử lại cũng vô ích.
+        leaveClosedQuiz(err.message);
+      } else {
+        classState.takeQuizDirty = { ...payload, ...classState.takeQuizDirty };
+        classState.takeQuizSaveState = 'error';
+        paintQuizSaveStatus();
+        scheduleQuizSave(QUIZ_SAVE_RETRY_MS);
+      }
+    }
+  } finally {
+    quizSaveRunning = false;
+    if (classState.attemptId === attemptId && Object.keys(classState.takeQuizDirty || {}).length > 0 && !quizSaveTimer) {
+      scheduleQuizSave();
+    }
+  }
+}
+
+function clearTakeQuizState() {
+  stopClassQuizTimer();
+  stopQuizAutosave();
+  classState.attemptId = null;
+  classState.takeQuizQuestions = [];
+  classState.takeQuizAnswers = {};
+  classState.takeQuizDirty = {};
+  classState.takeQuizSaveState = 'idle';
+  classState.takeQuizDeadline = null;
+}
+
+function leaveClosedQuiz(message) {
+  clearTakeQuizState();
+  classSetMessage(message || 'Bài kiểm tra đã kết thúc. Bài của bạn được chấm theo đáp án đã lưu.', 'info');
+  openClassDetail(classState.classId);
+}
+
 async function submitTakeQuiz(auto = false) {
   stopClassQuizTimer();
   const unanswered = classState.takeQuizQuestions.length - Object.keys(classState.takeQuizAnswers).length;
   if (!auto && unanswered > 0) {
-    const ok = window.confirm(`Bạn còn ${unanswered} câu chưa trả lời. Vẫn nộp bài?`);
-    if (!ok) return;
+    const ok = await groupConfirm({
+      title: 'Nộp bài',
+      message: `Bạn còn ${unanswered} câu chưa trả lời. Vẫn nộp bài?`,
+      confirmLabel: 'Nộp bài',
+    });
+    if (!ok) {
+      startClassQuizTimer();
+      return;
+    }
+  } else if (!auto) {
+    const ok = await groupConfirm({
+      title: 'Nộp bài',
+      message: 'Nộp bài ngay? Sau khi nộp không sửa được đáp án.',
+      confirmLabel: 'Nộp bài',
+    });
+    if (!ok) {
+      startClassQuizTimer();
+      return;
+    }
   }
+  stopQuizAutosave();
+  const attemptId = classState.attemptId;
   const answers = classState.takeQuizQuestions.map((q) => ({
     question_id: q.question_id,
     selected_answer: classState.takeQuizAnswers[q.question_id] || null,
   }));
 
-  elements.classContent.innerHTML = `<p class="muted-text">Đang chấm điểm...</p>`;
+  paintClassContent('<p class="muted-text">Đang nộp bài...</p>');
   try {
     const { data, error } = await supabase.rpc('submit_class_quiz_attempt', {
-      p_attempt_id: classState.attemptId,
+      p_attempt_id: attemptId,
       p_answers: answers,
     });
     if (error) throw error;
+    const result = Array.isArray(data) ? data[0] : data;
+    clearTakeQuizState();
+    classSetMessage(
+      result?.timed_out
+        ? 'Bài được nộp sau hạn chót nên chỉ tính các đáp án đã lưu trước đó. Kết quả hiện khi bài kết thúc.'
+        : 'Đã nộp bài. Kết quả hiện khi bài kết thúc.',
+      'success'
+    );
+    await openClassDetail(classState.classId);
+  } catch (err) {
+    if (auto || err?.code === 'P0001') {
+      clearTakeQuizState();
+      classSetMessage(
+        err?.code === 'P0001' ? (err.message || 'Không nộp được bài.') : 'Chưa nộp được bài. Hệ thống sẽ chấm theo đáp án đã lưu khi bài kết thúc.',
+        'error'
+      );
+      await openClassDetail(classState.classId);
+    } else {
+      // Mất mạng: giữ nguyên bài đang làm để bấm nộp lại.
+      classSetMessage('Không nộp được bài. Kiểm tra kết nối mạng rồi bấm Nộp bài lần nữa.', 'error');
+      renderTakeQuizScreen();
+    }
+  }
+}
+
+// ---------- 9. Xem lại bài (sau khi bài kết thúc) -------------------------------
+
+async function openQuizReview(quiz) {
+  classState.screen = 'review';
+  classState.takeQuizTitle = quiz.title || '';
+  classState.reviewData = [];
+  classState.reviewSummary = {
+    correct: Number(quiz.my_correct || 0),
+    total: Number(quiz.my_total || 0),
+    score: quiz.my_score10,
+    auto: Boolean(quiz.my_auto),
+  };
+  classSetMessage('');
+  paintClassContent('<p class="muted-text">Đang tải bài làm...</p>');
+  try {
+    const { data, error } = await supabase.rpc('get_class_quiz_review', { p_attempt_id: quiz.my_attempt_id });
+    if (error) throw error;
     classState.reviewData = data || [];
-    const correct = classState.reviewData.filter((r) => r.is_correct).length;
-    classState.reviewSummary = {
-      correct,
-      total: classState.reviewData.length,
-      timedOut: Boolean(classState.reviewData[0] && classState.reviewData[0].timed_out),
-    };
-    classState.screen = 'review';
     renderReviewScreen();
   } catch (err) {
-    classState.screen = 'detail';
-    classSetMessage(err.message || 'Không nộp được bài.', 'error');
+    classSetMessage(err.message || 'Không tải được bài làm.', 'error');
     await openClassDetail(classState.classId);
   }
 }
 
 function renderReviewScreen() {
   const s = classState.reviewSummary;
-  const percent = s && s.total > 0 ? Math.round((s.correct / s.total) * 1000) / 10 : 0;
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Kết quả</p>
-        <h3>${escapeHtml(classState.takeQuizTitle)}</h3>
-      </div>
-      <button class="primary-btn" type="button" data-class-action="back-detail">Xong</button>
+  paintClassContent(`
+    <div class="group-head">
+      <button class="ghost-btn" type="button" data-class-action="back-detail">← Quay lại nhóm</button>
     </div>
-    <div class="about-card" style="margin-bottom:16px;">
-      <p><strong>Điểm: ${s ? s.correct : 0}/${s ? s.total : 0} (${percent}%)</strong></p>
-      ${s && s.timedOut ? '<p class="muted-text">Bài được nộp sau hạn chót nên đáp án không được tính.</p>' : ''}
+    <div class="group-head">
+      <div class="group-head-main">
+        <h2>${escapeHtml(classState.takeQuizTitle)}</h2>
+        <p class="group-row-meta">Điểm <strong>${escapeHtml(formatScore10(s?.score))}</strong> · Đúng ${s ? s.correct : 0}/${s ? s.total : 0}${s?.auto ? ' · tự nộp' : ''}</p>
+      </div>
     </div>
     ${classState.reviewData.map((r) => `
-      <div class="quiz-card" style="margin-bottom:12px;">
+      <div class="quiz-card group-review-card">
         <p class="question-index">Câu ${Number(r.question_order)}</p>
         <p class="question-text">${escapeHtml(r.question_text || '')}</p>
         <div class="option-list">
@@ -4686,7 +5178,7 @@ function renderReviewScreen() {
         </div>
       </div>
     `).join('')}
-  `;
+  `);
 }
 
 // ---------- 6. Bảng tổng kết (admin) ------------------------------------------
@@ -4752,10 +5244,21 @@ function renderQuizLeaderboardScreen() {
 function wireClassEvents() {
   if (!elements.classContent) return;
 
+  document.addEventListener('visibilitychange', handleGroupVisibilityChange);
+  // Đóng tab / mất mạng rồi có lại: cố gửi nốt đáp án chưa lưu.
+  window.addEventListener('pagehide', () => flushQuizSave());
+  window.addEventListener('online', () => flushQuizSave());
+
   elements.classContent.addEventListener('click', (e) => {
+    const toggle = e.target.closest('[data-group-password-toggle]');
+    if (toggle) {
+      toggleGroupPassword(toggle, elements.classContent);
+      return;
+    }
     const btn = e.target.closest('[data-class-action]');
     if (!btn) return;
     const action = btn.dataset.classAction;
+    const quiz = btn.dataset.quizId ? classQuizById(btn.dataset.quizId) : null;
 
     switch (action) {
       case 'show-create':
@@ -4772,7 +5275,6 @@ function wireClassEvents() {
         break;
       case 'back-detail':
         classSetMessage('');
-        stopClassQuizTimer();
         if (classState.classId) {
           openClassDetail(classState.classId); // Tải lại dữ liệu mới nhất (điểm, trạng thái nộp bài...)
         } else {
@@ -4808,14 +5310,26 @@ function wireClassEvents() {
       case 'member-menu':
         openMemberMenu(btn, btn.dataset.userId);
         break;
+      case 'start-quiz':
+        if (quiz) openStartQuizDialog(quiz);
+        break;
+      case 'end-quiz':
+        if (quiz) handleEndQuiz(quiz);
+        break;
+      case 'change-quiz-password':
+        if (quiz) openChangeQuizPasswordDialog(quiz);
+        break;
       case 'delete-quiz':
-        handleDeleteQuiz(btn.dataset.quizId);
+        if (quiz) handleDeleteQuiz(quiz);
         break;
       case 'view-results':
-        openQuizLeaderboard(btn.dataset.quizId, btn.dataset.quizTitle);
+        if (quiz) openQuizLeaderboard(quiz.quiz_id, quiz.title);
         break;
       case 'take-quiz':
-        openTakeQuiz(btn.dataset.quizId, btn.dataset.quizTitle);
+        if (quiz) handleTakeQuiz(quiz);
+        break;
+      case 'review-quiz':
+        if (quiz) openQuizReview(quiz);
         break;
       case 'select-answer':
         handleSelectAnswer(btn.dataset.key);

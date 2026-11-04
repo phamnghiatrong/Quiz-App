@@ -500,3 +500,71 @@
     flex: 1 1 0;
   }
 }
+
+/* ---------- Trong nhóm: lịch sử bài kiểm tra ---------- */
+.group-quiz-state {
+  flex: 0 1 auto;
+}
+
+#classContent .group-state-text {
+  font-size: 0.9375rem;
+  color: var(--app-ink-2) !important;
+}
+
+#classContent .group-state-text strong {
+  color: var(--app-ink) !important;
+}
+
+#classContent button.group-btn-danger {
+  color: var(--app-bad) !important;
+}
+
+#classContent .group-save-status {
+  margin-left: 4px;
+  font-size: 0.875rem;
+  color: var(--app-ink-3) !important;
+}
+
+.group-review-card + .group-review-card {
+  margin-top: 1.25rem;
+}
+
+/* ---------- Form tạo bài: ghi chú và nút nằm ở cột nội dung của lưới 2 cột ---------- */
+.group-form-note {
+  grid-column: 2;
+  margin: 0;
+}
+
+#classContent .group-form-msg.error {
+  color: var(--app-bad) !important;
+}
+
+.group-password-wrap input {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .group-form-note {
+    grid-column: auto;
+  }
+
+  #classContent .group-quiz-state {
+    justify-content: flex-start;
+    flex-basis: 100%;
+  }
+
+  #classContent .group-quiz-state button {
+    width: auto !important;
+  }
+
+  #classContent .group-form-note button {
+    width: 100% !important;
+  }
+}
+
+/* Số đồng hồ nằm trong nhãn: style-final-fix.css ép span về chữ thường, màu chung */
+#classContent .group-tag span {
+  color: inherit !important;
+  font-weight: inherit !important;
+  font-variant-numeric: tabular-nums;
+}
