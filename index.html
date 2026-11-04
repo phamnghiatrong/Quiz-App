@@ -76,9 +76,9 @@
       })();
     </script>
     <link rel="stylesheet" href="./style.css?v=20261104-1" />
-    <link rel="stylesheet" href="./style-final-fix.css?v=20261104-1" />
-    <link rel="stylesheet" href="./theme.css?v=20261104-1" />
-    <link rel="stylesheet" href="./menu.css?v=20261104-1" />
+    <link rel="stylesheet" href="./style-final-fix.css?v=20261104-2" />
+    <link rel="stylesheet" href="./theme.css?v=20261104-2" />
+    <link rel="stylesheet" href="./menu.css?v=20261104-2" />
     <style>
       /* Đảm bảo thuộc tính hidden luôn có tác dụng và không bị ghi đè bởi CSS khác */
       html body [hidden] {
@@ -401,13 +401,29 @@
           <p id="authMessage" class="status-text" aria-live="polite"></p>
         </section>
 
-                <section id="dashboardSection" class="panel" hidden>
-          <div id="homeView"></div>
+                <section id="dashboardSection" hidden>
+          <!-- Trang chủ: chỉ có video toàn màn hình và chân trang. Video do syncHomeHeroVideo()
+               trong app.js gắn vào #homeHeroMedia, link đặt ở HOME_HERO_VIDEO_URL đầu app.js. -->
+          <div id="homeView" hidden>
+            <section id="homeHero" class="home-hero" aria-label="Quiz App">
+              <h1 class="home-hero-title">Quiz App - Ôn tập trắc nghiệm</h1>
+              <div id="homeHeroMedia" class="home-hero-media" aria-hidden="true"></div>
+            </section>
+
+            <!-- Muốn thêm khối cho Trang chủ thì đặt vào đây, giữa video và chân trang.
+                 Khung này tự ẩn khi trống. Mỗi khối dùng class "panel". -->
+            <div id="homeContent" class="home-content"></div>
+
+            <footer id="versionFooter" class="home-footer" aria-label="Phiên bản ứng dụng">
+              <p><strong>Quiz App</strong> - Phiên bản 5.1, cập nhật ngày 04/11/2026</p>
+              <p><a href="https://phamnghiatrong.com" target="_blank" rel="noopener">phamnghiatrong.com</a></p>
+            </footer>
+          </div>
 
           <!-- Màn môn học: nội dung (chọn bài, luyện tập, thi thử) do setupHomeViewLayout() dựng -->
           <div id="subjectView" hidden></div>
 
-                    <div id="accountView" class="hero-card" hidden>
+                    <div id="accountView" hidden>
             <p class="eyebrow">Tài khoản</p>
             <h2>Thông tin tài khoản</h2>
             <ul class="about-list">
@@ -546,7 +562,7 @@
                                     <p class="muted-text">
                     Ứng dụng hướng đến sự đơn giản, dễ sử dụng và hiệu quả thực tế, giúp việc ôn tập trở nên nhẹ nhàng hơn nhưng vẫn đảm bảo tính nghiêm túc trong học tập.
                   </p>
-                  <p class="muted-text"><strong>Phiên bản 5.0</strong> cập nhật ngày 04/11/2026</p>
+                  <p class="muted-text"><strong>Phiên bản 5.1</strong> cập nhật ngày 04/11/2026</p>
                 </section>
               </div>
 
@@ -556,6 +572,19 @@
           <h3>Thông tin nâng cấp</h3>
 
           <div class="changelog-list">
+                    <details class="changelog-item">
+                      <summary><strong>Phiên bản 5.1</strong>&nbsp;- Cập nhật ngày: 04/11/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Trang chủ mới: video toàn màn hình, thanh menu trong suốt nằm trên video, cuộn xuống thì video mờ dần và menu hiện lại nền tối.</li>
+                          <li>Tài khoản và Tùy chỉnh trên menu đổi thành biểu tượng, trên điện thoại vẫn có chữ kèm theo.</li>
+                          <li>Bỏ các ô lồng nhau, mỗi trang chỉ còn một lớp khung nên gọn và đỡ rối mắt hơn.</li>
+                          <li>Bài đang làm dở: nút Tiếp tục nằm ở màn của môn đó. Rời app quá 10 phút thì quay về đúng màn môn học của bài đang làm.</li>
+                        </ul>
+                      </div>
+                    </details>
+
                     <details class="changelog-item">
                       <summary><strong>Phiên bản 5.0</strong>&nbsp;- Cập nhật ngày: 04/11/2026</summary>
                       <div class="changelog-content">
@@ -749,15 +778,12 @@
         </div>
               </footer>
 
-      <footer id="versionFooter" class="app-footer" hidden aria-label="Phiên bản ứng dụng">
-        <p class="muted-text"><strong>Phiên bản 5.0</strong> cập nhật ngày 04/11/2026</p>
-      </footer>
 
         </div>
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20261104-1"></script>
+    <script type="module" src="./app.js?v=20261104-2"></script>
 
   </body>
 </html>

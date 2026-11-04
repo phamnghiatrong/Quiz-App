@@ -425,7 +425,6 @@ th, td {
 
 th {
   color: var(--app-ink-3) !important;
-  background: var(--app-th-bg) !important;
 }
 
 /* Mobile */
@@ -1828,15 +1827,13 @@ body:has(#authSection:not([hidden])) .app-shell > header.app-brand-plain {
 }
 /* Khung phản hồi + giải thích: màu cho nền sáng (trước đây dùng màu nền tối nên chữ gần như trắng) */
 .feedback.correct {
-  background: var(--app-fb-ok-bg);
-  border: 1px solid var(--app-fb-ok-line);
+  border-left-color: var(--app-fb-ok-ink);
   color: var(--app-fb-ok-ink);
 }
 
 .feedback.incorrect,
 .feedback.wrong {
-  background: var(--app-fb-bad-bg);
-  border: 1px solid var(--app-fb-bad-line);
+  border-left-color: var(--app-fb-bad-ink);
   color: var(--app-fb-bad-ink);
 }
 

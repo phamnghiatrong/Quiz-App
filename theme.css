@@ -28,8 +28,6 @@
   --app-card-2: rgba(255, 255, 255, 0.96);
   --app-input-bg: rgba(255, 255, 255, 0.94);
   --app-btn-bg: rgba(255, 255, 255, 0.92);
-  --app-th-bg: rgba(248, 250, 252, 0.88);
-  --app-th-solid: #f8fafc;
   --app-hover-soft: #faf5ff;
   --app-face-top: #f5f3ff;
 
@@ -73,11 +71,7 @@
   --app-kbd-bg: rgba(15, 23, 42, 0.07);
 
   /* Khung phản hồi đúng/sai ở màn làm bài */
-  --app-fb-ok-bg: #ecfdf5;
-  --app-fb-ok-line: #a7f3d0;
   --app-fb-ok-ink: #166534;
-  --app-fb-bad-bg: #fef2f2;
-  --app-fb-bad-line: #fecaca;
   --app-fb-bad-ink: #b91c1c;
   --app-note-ink: #b45309;
 
@@ -139,8 +133,6 @@
   --app-card-2: rgba(30, 25, 56, 0.96);
   --app-input-bg: #17132c;
   --app-btn-bg: #282247;
-  --app-th-bg: rgba(255, 255, 255, 0.05);
-  --app-th-solid: #282247;
   --app-hover-soft: rgba(139, 92, 246, 0.14);
   --app-face-top: #2a2350;
 
@@ -183,11 +175,7 @@
   --app-dot-idle: #5f5a82;
   --app-kbd-bg: rgba(255, 255, 255, 0.12);
 
-  --app-fb-ok-bg: rgba(34, 197, 94, 0.14);
-  --app-fb-ok-line: rgba(34, 197, 94, 0.45);
   --app-fb-ok-ink: #86efac;
-  --app-fb-bad-bg: rgba(239, 68, 68, 0.14);
-  --app-fb-bad-line: rgba(239, 68, 68, 0.45);
   --app-fb-bad-ink: #fca5a5;
   --app-note-ink: #fbbf24;
 

@@ -193,9 +193,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .opt.wrong .k { background: var(--bad); color: var(--on-fill); }
 .opt.dim { opacity: .55; }
 
-.fb { border-radius: var(--r-md); padding: 14px 16px; display: grid; gap: 6px; border: 1px solid var(--line); background: var(--surface-3); }
-.fb.ok { border-color: rgba(21, 128, 61, .3); background: var(--ok-tint); }
-.fb.no { border-color: rgba(220, 38, 38, .25); background: var(--bad-tint); }
+.fb { padding: 2px 0 2px 12px; display: grid; gap: 6px; border-left: 3px solid var(--line-strong); }
+.fb.ok { border-left-color: var(--ok); }
+.fb.no { border-left-color: var(--bad); }
 .fb-title { font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .fb.ok .fb-title { color: var(--ok); }
 .fb.no .fb-title { color: var(--bad); }
@@ -209,7 +209,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .score-ring { width: 128px; height: 128px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--surface-2) 0); }
 .score-ring span { width: 100px; height: 100px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font-size: 1.625rem; font-weight: 700; }
 .miss-list { width: 100%; display: grid; gap: 8px; text-align: left; }
-.miss { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.miss { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 
 /* Bắt đầu phiên */
 .start { display: grid; gap: 14px; justify-items: center; text-align: center; padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface-3); }

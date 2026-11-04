@@ -11,7 +11,6 @@ import { initSettings } from './settings.js?v=20261104-1';
 
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
 
-const APP_NAME = "Quiz App"; // New: Global app name
 const SUPABASE_URL = (env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL || '').trim();
 const SUPABASE_ANON_KEY = (env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY || '').trim();
 
@@ -31,12 +30,12 @@ const supabase = configError
         storage: window.localStorage,
       },
     });
-// Khung hero ở Trang chủ. Để trống URL = chưa có video, hiện nền gradient (hoặc poster).
+// Video toàn màn hình ở Trang chủ. Để trống URL = chưa có video, hiện nền tĩnh (gradient hoặc poster).
 // Video nên nén nhỏ: dưới khoảng 5 MB, 720p, H.264/MP4 hoặc WebM, vì nhiều người mở bằng 4G.
 const HOME_HERO_VIDEO_URL = '';
 const HOME_HERO_POSTER_URL = '';
-const HOME_HERO_TITLE = 'Quiz App - Ôn tập trắc nghiệm';
-const HOME_HERO_TEXT = 'Luyện tập, thi thử và theo dõi tiến bộ của bạn ở từng môn học.';
+// Cuộn quá số px này thì menu trên Trang chủ hết trong suốt, hiện lại nền tối.
+const HOME_HEADER_SOLID_AFTER = 48;
 
 const LEGACY_QUIZ_DRAFT_KEY = 'politics_quiz_draft';
 const QUIZ_DRAFT_PREFIX = 'quiz-progress';
@@ -152,13 +151,12 @@ const elements = {
     feedbackInput: document.getElementById('feedbackInput'),
   sendFeedbackBtn: document.getElementById('sendFeedbackBtn'),
 
+  homeHero: document.getElementById('homeHero'),
+  homeHeroMedia: document.getElementById('homeHeroMedia'),
+
   // Dựng trong setupHomeViewLayout()
-  homeHero: null,
-  resumeCard: null,
   quizStartCard: null,
   selectedSubjectTitle: null,
-  announcementCard: null,
-  reviewCard: null,
 };
 
 
@@ -298,25 +296,6 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-
-function ensureVersionFooterPlacement() {
-  const versionFooter = document.getElementById('versionFooter');
-  const appShell = document.querySelector('.app-shell');
-  const appFrame = document.querySelector('.app-frame');
-
-  if (!versionFooter || !appShell || !appFrame) return;
-
-  // Thêm class riêng để style căn giữa theo toàn bộ layout
-  versionFooter.classList.add('app-footer-version');
-
-  // Nếu đang nằm trong cột nội dung bên phải (.app-content), đưa ra ngoài để căn giữa toàn trang
-  const isInsideAppContent = Boolean(versionFooter.closest('.app-content'));
-  if (!isInsideAppContent) return;
-
-  // Đặt xuống cuối app-shell (sau app-frame) để không bị căn theo cột phải
-  appShell.appendChild(versionFooter);
 }
 
 
@@ -780,30 +759,6 @@ function showSection(sectionName) {
   syncQuizLookup(resolved === 'quiz');
 }
 
-function setDashboardContainerMode(mode) {
-  if (!elements.dashboardSection) return;
-
-  const isHome = mode === 'home';
-  const isAccount = mode === 'account';
-
-  if (isHome || isAccount) {
-    // Home và Account cần tách thành các card riêng -> bỏ panel ở container cha
-    elements.dashboardSection.classList.remove('panel');
-    elements.dashboardSection.style.background = 'transparent';
-    elements.dashboardSection.style.border = 'none';
-    elements.dashboardSection.style.boxShadow = 'none';
-    elements.dashboardSection.style.padding = '0';
-  } else {
-    // Các view khác (Lịch sử/BXH) vẫn dùng panel như cũ
-    elements.dashboardSection.classList.add('panel');
-    elements.dashboardSection.style.background = '';
-    elements.dashboardSection.style.border = '';
-    elements.dashboardSection.style.boxShadow = '';
-    elements.dashboardSection.style.padding = '';
-  }
-}
-
-
 function setView(viewKey) {
   const requiresAuth = ['home', 'subject', 'account', 'history', 'leaderboard', 'classes', 'english', 'chinese', 'changelog'].includes(viewKey);
 
@@ -840,11 +795,9 @@ function setView(viewKey) {
 
   switch (targetView) {
     case 'home':
-      setDashboardContainerMode('home');
       showSection('dashboard');
       if (elements.homeView) elements.homeView.hidden = false;
       loadSubjects();
-      renderHomeResumeCard();
       break;
 
     case 'subject':
@@ -852,7 +805,6 @@ function setView(viewKey) {
         setView('home');
         return;
       }
-      setDashboardContainerMode('home');
       showSection('dashboard');
       if (elements.subjectView) elements.subjectView.hidden = false;
       updateSubjectViewTitle();
@@ -860,25 +812,21 @@ function setView(viewKey) {
       break;
 
     case 'account':
-      setDashboardContainerMode('account');
       showSection('dashboard');
       if (elements.accountView) elements.accountView.hidden = false;
       break;
     case 'history':
-      setDashboardContainerMode('default');
       showSection('dashboard');
       if (elements.historyCard) elements.historyCard.hidden = false;
       loadHistory();
       updateRetryWrongButton();
       break;
     case 'leaderboard':
-      setDashboardContainerMode('default');
       showSection('dashboard');
       if (elements.leaderboardCard) elements.leaderboardCard.hidden = false;
       updateLeaderboardTitle();
       break;
     case 'classes':
-      setDashboardContainerMode('default');
       showSection('dashboard');
       if (elements.classCard) elements.classCard.hidden = false;
       // Nếu đã được yêu cầu mở sẵn màn "tham gia lớp" kèm mã mời (từ link
@@ -892,51 +840,43 @@ function setView(viewKey) {
       }
       break;
     case 'english':
-      setDashboardContainerMode('default');
       showSection('none');
       if (elements.englishTabs) elements.englishTabs.hidden = false;
       showEnglishTab(getEnglishTab());
       break;
     case 'chinese':
-      setDashboardContainerMode('default');
       showSection('none');
       if (elements.chineseView) elements.chineseView.hidden = false;
       openChinese();
       break;
     case 'author':
-      setDashboardContainerMode('default');
       showSection('none');
       if (elements.aboutCard) elements.aboutCard.hidden = false;
       break;
     case 'feedback':
-      setDashboardContainerMode('default');
       showSection('none');
       if (elements.feedbackSection) elements.feedbackSection.hidden = false;
       break;
     case 'aboutApp':
-      setDashboardContainerMode('default');
       showSection('none');
       if (elements.appInfoCard) elements.appInfoCard.hidden = false;
       break;
     case 'changelog':
-      setDashboardContainerMode('default');
       showSection('none');
       if (elements.changelogCard) elements.changelogCard.hidden = false;
       break;
     case 'settings':
-      setDashboardContainerMode('default');
       showSection('none');
       if (elements.settingsCard) elements.settingsCard.hidden = false;
       break;
     case 'auth':
     default:
-      setDashboardContainerMode('default');
       showSection('auth');
       break;
   }
 
   syncNavActiveState();
-  syncHomeHeroPlayback();
+  syncHomeScrollEffects();
 }
 
 
@@ -1008,7 +948,7 @@ function showEnglishTab(tabId) {
 // này lần đầu (không làm chậm lúc vào app). Tiến độ học lưu theo từng tài
 // khoản nên truyền currentUserId; đổi tài khoản thì module tự dựng lại.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa file trong thư mục tenses/.
-const TENSES_MODULE_URL = './tenses/tenses.js?v=20261104-1';
+const TENSES_MODULE_URL = './tenses/tenses.js?v=20261104-2';
 let tensesModulePromise = null;
 
 async function openTenses() {
@@ -1035,7 +975,7 @@ async function openTenses() {
 // giống mục 12 thì. Tiến độ thẻ YCT lưu theo tài khoản (currentUserId); từ tự
 // tra ("Sổ từ của tôi") lưu ở bảng vocab_words nên truyền client supabase.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa chinese.js / chinese-data.js / chinese.css.
-const CHINESE_MODULE_URL = './chinese/chinese.js?v=20261104-1';
+const CHINESE_MODULE_URL = './chinese/chinese.js?v=20261104-2';
 let chineseModulePromise = null;
 
 async function openChinese() {
@@ -1063,7 +1003,7 @@ async function openChinese() {
 // Sổ từ lưu ở bảng Supabase vocab_words (cần chạy vocab/vocab-schema.sql) nên
 // truyền client supabase cho module. Nạp lười giống mục 12 thì / Tiếng Trung.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa vocab.js / vocab-api.js / vocab.css.
-const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261104-1';
+const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261104-2';
 let vocabModulePromise = null;
 
 async function openVocab() {
@@ -1090,7 +1030,7 @@ async function openVocab() {
 // Ô tra từ bên phải màn làm bài, chỉ hiện với các môn tiếng Anh (slug "tieng-anh..."):
 // vocab/vocab-mini.js (nạp lười). Bấm đúp vào một từ trong câu hỏi để tra nhanh.
 // Nhớ tăng ?v= khi sửa vocab-mini.js / vocab-api.js.
-const VOCAB_MINI_URL = './vocab/vocab-mini.js?v=20261104-1';
+const VOCAB_MINI_URL = './vocab/vocab-mini.js?v=20261104-2';
 let quizLookupMini = null;
 
 function isEnglishSubject(slug) {
@@ -1172,6 +1112,12 @@ function getMenuSubjects() {
     .map((row) => row.subject);
 }
 
+// Tài khoản và Tùy chỉnh chỉ hiện icon trên thanh ngang. Trong menu điện thoại có thêm chữ.
+const NAV_ICONS = {
+  user: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  settings: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+};
+
 function buildNavTree() {
   const subjectChildren = (view) =>
     getMenuSubjects().map((subject) => ({ label: subject.name, view, slug: subject.slug }));
@@ -1202,13 +1148,14 @@ function buildNavTree() {
     {
       id: 'account',
       label: 'Tài khoản',
+      icon: 'user',
       children: [
         { label: 'Thông tin', view: 'account' },
         { label: 'Lịch sử ôn tập', view: 'history' },
         { label: 'Đăng xuất', action: 'logout' },
       ],
     },
-    { id: 'settings', label: 'Tùy chỉnh', view: 'settings' },
+    { id: 'settings', label: 'Tùy chỉnh', icon: 'settings', view: 'settings' },
   ];
 }
 
@@ -1223,12 +1170,19 @@ function renderMainNav() {
     return `data-nav-view="${escapeHtml(item.view)}"${slug}`;
   };
 
+  // Mục dùng icon: trên thanh ngang chữ bị ẩn nên tên mục nằm ở aria-label và title.
+  const iconClass = (node) => (node.icon ? ' nav-link-icon' : '');
+  const iconAttrs = (node) => (node.icon ? ` aria-label="${escapeHtml(node.label)}" title="${escapeHtml(node.label)}"` : '');
+  const labelHtml = (node) => (node.icon
+    ? `${NAV_ICONS[node.icon]}<span class="nav-label">${escapeHtml(node.label)}</span>`
+    : `<span>${escapeHtml(node.label)}</span>`);
+
   const html = buildNavTree()
     .map((node) => {
       if (!node.children) {
         return `
           <li class="nav-item">
-            <button class="nav-link" type="button" ${itemAttrs(node)}>${escapeHtml(node.label)}</button>
+            <button class="nav-link${iconClass(node)}" type="button" ${itemAttrs(node)}${iconAttrs(node)}>${labelHtml(node)}</button>
           </li>`;
       }
       const subId = `navSub-${node.id}`;
@@ -1240,8 +1194,8 @@ function renderMainNav() {
         : '<li class="nav-sub-empty">Đang tải...</li>';
       return `
         <li class="nav-item has-sub">
-          <button class="nav-link" type="button" data-nav-branch="${escapeHtml(node.id)}" aria-expanded="false" aria-controls="${subId}">
-            <span>${escapeHtml(node.label)}</span><span class="nav-caret" aria-hidden="true"></span>
+          <button class="nav-link${iconClass(node)}" type="button" data-nav-branch="${escapeHtml(node.id)}" aria-expanded="false" aria-controls="${subId}"${iconAttrs(node)}>
+            ${labelHtml(node)}<span class="nav-caret" aria-hidden="true"></span>
           </button>
           <ul id="${subId}" class="nav-sub" hidden>${children}</ul>
         </li>`;
@@ -1473,13 +1427,6 @@ function openSubject(slug) {
   setView('subject');
 }
 
-// Nút Tiếp tục ở khối "Bài đang làm dở": đưa vào đúng môn rồi mở lại bài.
-function resumeDraftForSubject(slug) {
-  openSubject(slug);
-  continuePausedQuiz();
-  window.scrollTo({ top: 0 });
-}
-
 
 function setAuthMode(mode) {
 
@@ -1664,39 +1611,12 @@ async function loadLessons(slug) {
 }
 
 function setupHomeViewLayout() {
-  if (!elements.homeView) return;
-
-  elements.homeView.innerHTML = ''; // Clear existing content
-  elements.homeView.className = 'home-content-grid'; // Apply grid for home view
-
-  // Khung hero (video nền hoặc gradient)
-  const homeHero = document.createElement('section');
-  homeHero.className = 'home-hero';
-  if (HOME_HERO_POSTER_URL) {
-    homeHero.style.setProperty('--hero-poster', `url("${encodeURI(HOME_HERO_POSTER_URL)}")`);
+  // Trang chủ: khung nằm sẵn trong index.html, ở đây chỉ gắn poster, video và hiệu ứng cuộn.
+  if (HOME_HERO_POSTER_URL && elements.homeHeroMedia) {
+    elements.homeHeroMedia.style.setProperty('--hero-poster', `url("${encodeURI(HOME_HERO_POSTER_URL)}")`);
   }
-  homeHero.innerHTML = `
-      <div class="home-hero-overlay" aria-hidden="true"></div>
-      <div class="home-hero-content">
-        <h1>${escapeHtml(HOME_HERO_TITLE)}</h1>
-        <p>${escapeHtml(HOME_HERO_TEXT)}</p>
-      </div>
-  `;
-  elements.homeView.appendChild(homeHero);
-  elements.homeHero = homeHero;
   syncHomeHeroVideo();
-  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', syncHomeHeroVideo);
-
-  // Bài đang làm dở
-  const resumeCard = document.createElement('div');
-  resumeCard.className = 'panel info-card resume-card';
-  resumeCard.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-resume-slug]');
-    if (button) resumeDraftForSubject(button.dataset.resumeSlug);
-  });
-  elements.homeView.appendChild(resumeCard);
-  elements.resumeCard = resumeCard;
-  renderHomeResumeCard();
+  setupHomeScrollEffects();
 
   // Quiz Start Card
   const quizStartCard = document.createElement('div');
@@ -1744,81 +1664,13 @@ function setupHomeViewLayout() {
 
 
  
-// Announcement Card
-const announcementCard = document.createElement('div');
-announcementCard.className = 'panel info-card announcement-card';
-
-announcementCard.innerHTML = `
-  <h2>Thông báo từ nhà phát triển</h2>
-
-  <p
-    class="muted-text"
-    style="
-      display: block;
-      width: 100%;
-      margin: 0;
-      text-align: justify;
-      text-align-last: left;
-      line-height: 1.7;
-      word-spacing: normal;
-    "
-  >
-    ${APP_NAME} Chúc mọi người học tốt và thi tốt. Nếu phát hiện sai đáp án hay vấn đề gì, các bạn có thể 
-    gửi phản hồi về cho nhà phát triển thông qua email. Xin cảm ơn.
-  </p>
-`;
-
-elements.homeView.appendChild(announcementCard);
-elements.announcementCard = announcementCard;
-
-
-
-  // Review Card
-const reviewCard = document.createElement('div');
-reviewCard.className = 'panel info-card review-section';
-
-reviewCard.innerHTML = `
-  <h2>Đánh giá từ người học</h2>
-
-  <div class="review-grid">
-    <article class="review-item">
-      <p class="review-content">
-        “Giao diện dễ nhìn, thao tác chọn môn nhanh và thuận tiện.”
-      </p>
-      <p class="review-student">
-        Sinh viên đến từ Khoa Công nghệ Thông tin
-      </p>
-    </article>
-
-    <article class="review-item">
-      <p class="review-content">
-        “Ứng dụng phù hợp để ôn tập và kiểm tra kiến thức trước kỳ thi.”
-      </p>
-      <p class="review-student">
-        Sinh viên đến từ Khoa Điện – Điện tử
-      </p>
-    </article>
-
-    <article class="review-item">
-      <p class="review-content">
-        “Mong ứng dụng tiếp tục bổ sung thêm nhiều môn học trong thời gian tới.”
-      </p>
-      <p class="review-student">
-        Sinh viên đến từ Khoa Kinh tế
-      </p>
-    </article>
-  </div>
-`;
-
-elements.homeView.appendChild(reviewCard);
-elements.reviewCard = reviewCard;
   loadSubjects(); // Load and render subjects
 }
 
 // Video chỉ tạo khi có URL và người dùng không bật "giảm chuyển động". Không có video thì
-// khung hero tự hiện nền gradient / poster trong CSS.
+// khung tự hiện nền tĩnh (gradient hoặc poster) trong CSS.
 function syncHomeHeroVideo() {
-  const hero = elements.homeHero;
+  const hero = elements.homeHeroMedia;
   if (!hero) return;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const wantVideo = Boolean(HOME_HERO_VIDEO_URL) && !reduceMotion;
@@ -1850,12 +1702,56 @@ function syncHomeHeroVideo() {
   syncHomeHeroPlayback();
 }
 
-// Rời Trang chủ thì dừng video để đỡ tốn pin và dữ liệu trên điện thoại.
+// Rời Trang chủ hoặc video đã mờ hẳn khi cuộn thì dừng, đỡ tốn pin và dữ liệu trên điện thoại.
 function syncHomeHeroPlayback() {
-  const video = elements.homeHero?.querySelector('video');
+  const media = elements.homeHeroMedia;
+  const video = media?.querySelector('video');
   if (!video) return;
-  if (currentView === 'home') video.play()?.catch(() => {});
-  else video.pause();
+  const shouldPlay = currentView === 'home' && media.style.opacity !== '0';
+  if (shouldPlay && video.paused) video.play()?.catch(() => {});
+  else if (!shouldPlay && !video.paused) video.pause();
+}
+
+let homeScrollFrame = 0;
+
+// Trang chủ: menu trong suốt khi đang ở đầu trang, video mờ dần theo độ cuộn. Chỉ đổi opacity
+// nên không phải vẽ lại trang, cuộn trên điện thoại không bị giật.
+function syncHomeScrollEffects() {
+  homeScrollFrame = 0;
+  const onHome = currentView === 'home' && isAuthed();
+  const scrollY = window.scrollY;
+
+  document.body.classList.toggle('is-home', onHome);
+  elements.siteHeader?.classList.toggle('is-over-hero', onHome && scrollY <= HOME_HEADER_SOLID_AFTER);
+
+  const { homeHero: hero, homeHeroMedia: media } = elements;
+  if (!onHome || !hero || !media) {
+    syncHomeHeroPlayback();
+    return;
+  }
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    media.style.opacity = '';
+  } else {
+    // Khung #homeHero cao hơn màn hình: phần dôi ra là quãng cuộn để video mờ dần.
+    const fadeDistance = Math.max(1, hero.offsetHeight - media.offsetHeight);
+    const progress = Math.min(1, Math.max(0, scrollY / fadeDistance));
+    media.style.opacity = progress >= 1 ? '0' : (1 - progress).toFixed(3);
+  }
+  syncHomeHeroPlayback();
+}
+
+function setupHomeScrollEffects() {
+  const schedule = () => {
+    if (currentView !== 'home' || homeScrollFrame) return;
+    homeScrollFrame = window.requestAnimationFrame(syncHomeScrollEffects);
+  };
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+    syncHomeHeroVideo();
+    syncHomeScrollEffects();
+  });
 }
 
 // Nhãn tiếng Việt của chế độ làm bài. Hai nhãn "... câu / ... phút" là các lượt thi thử
@@ -1876,46 +1772,6 @@ function formatQuizMode(mode) {
     default:
       return mode || '';
   }
-}
-
-// Khối "Bài đang làm dở" ở Trang chủ: mọi bài đã tạm dừng của tài khoản này, mỗi môn tối đa 1 bài.
-function renderHomeResumeCard() {
-  const card = elements.resumeCard;
-  if (!card) return;
-
-  const drafts = availableSubjects
-    .map((subject) => ({ subject, draft: getPausedQuizDraft(subject.slug, currentUserId) }))
-    .filter((row) => row.draft)
-    .sort((a, b) => String(b.draft.savedAt || '').localeCompare(String(a.draft.savedAt || '')));
-
-  if (!drafts.length) {
-    card.innerHTML = `
-      <h2>Bài đang làm dở</h2>
-      <p class="muted-text">Chưa có bài nào đang làm dở. Chọn một môn ở mục Môn học trên menu để bắt đầu.</p>
-    `;
-    return;
-  }
-
-  card.innerHTML = `
-    <h2>Bài đang làm dở</h2>
-    <ul class="resume-list">
-      ${drafts.map(({ subject, draft }) => {
-        const total = Number(draft.questions?.length || 0);
-        const answered = Array.isArray(draft.answers)
-          ? draft.answers.filter((answer) => answer !== null && answer !== undefined).length
-          : 0;
-        const savedAt = draft.savedAt ? new Date(draft.savedAt).toLocaleString('vi-VN') : '';
-        return `
-          <li class="resume-item">
-            <div class="resume-info">
-              <strong>${escapeHtml(subject.name)}</strong>
-              <span class="muted-text">${escapeHtml(formatQuizMode(resolveDraftMode(draft)))} · Đã làm ${answered}/${total} câu${savedAt ? ` · Lưu lúc ${escapeHtml(savedAt)}` : ''}</span>
-            </div>
-            <button class="primary-btn" type="button" data-resume-slug="${escapeHtml(subject.slug)}">Tiếp tục</button>
-          </li>`;
-      }).join('')}
-    </ul>
-  `;
 }
 
 // Hiển thị tên môn học dạng IN HOA (chỉ đổi ở giao diện, không sửa dữ liệu trong DB)
@@ -1950,7 +1806,6 @@ function handleSubjectsLoaded() {
     renderMainNav();
     updateSubjectViewTitle();
     updateLeaderboardTitle();
-    renderHomeResumeCard();
 }
 
 function getSubjectName(slug) {
@@ -4470,7 +4325,8 @@ function wireEvents() {
 // - Luôn lưu nháp bài đang làm và dừng đồng hồ (giống trước đây).
 // - Quay lại trong AWAY_EXIT_MS: giữ nguyên màn hình đang học; nếu bài bị dừng
 //   do rời app (không phải người dùng bấm "Tạm dừng") thì tự chạy tiếp.
-// - Quay lại sau AWAY_EXIT_MS: thoát về trang chủ, bài đã lưu nằm ở khối "Bài đang làm dở".
+// - Quay lại sau AWAY_EXIT_MS: đang làm bài thì về màn môn học của bài đó để bấm "Tiếp tục",
+//   đang ở trang khác thì về trang chủ.
 // - Tắt hẳn app: lần mở sau bắt đầu lại từ trang chủ (trạng thái không lưu).
 const AWAY_EXIT_MS = 10 * 60 * 1000;
 let hiddenAt = 0;
@@ -4509,11 +4365,12 @@ function handleReturnToApp() {
   const hadQuiz = Boolean(isQuizVisible() && questions.length);
   if (away >= AWAY_EXIT_MS && isAuthed() && (hadQuiz || (currentView !== 'home' && currentView !== 'auth'))) {
     pausedByHide = false;
-    navigateTo('home');
+    if (hadQuiz) navigateTo('subject', { slug: confirmedSubjectSlug });
+    else navigateTo('home');
     const mins = Math.round(AWAY_EXIT_MS / 60000);
     showAppNotice(
       hadQuiz
-        ? `Bạn đã rời app hơn ${mins} phút nên bài làm đã được lưu và tạm dừng. Bấm "Tiếp tục" ở mục Bài đang làm dở để làm tiếp.`
+        ? `Bạn đã rời app hơn ${mins} phút nên bài làm đã được lưu và tạm dừng. Bấm "Tiếp tục" để làm tiếp.`
         : `Bạn đã rời app hơn ${mins} phút nên app đã quay về trang chủ.`
     );
     return;
@@ -4576,9 +4433,6 @@ function openPasswordRecovery(session) {
 }
 
 (async function init() {
-  // Dòng phiên bản: căn giữa theo toàn bộ trang (không theo cột phải)
-  ensureVersionFooterPlacement();
-
   if (configError) {
     setStatus(configError, 'error');
   }
@@ -4676,8 +4530,7 @@ if (!configError && isPasswordRecoveryUrl()) {
   // Từ phiên bản này, mỗi tài khoản + môn có một khóa riêng.
   localStorage.removeItem(LEGACY_QUIZ_DRAFT_KEY);
 
-  // Bài làm đang lưu chỉ hiện ở khối "Bài đang làm dở" (Trang chủ) và nút "Tiếp tục" ở
-  // màn môn học. Không tự động nhảy vào màn hình làm bài.
+  // Bài làm đang lưu hiện ở nút "Tiếp tục" của màn môn học. Không tự động nhảy vào màn làm bài.
 
   if (configError) {
     return;

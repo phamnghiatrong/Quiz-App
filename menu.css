@@ -37,6 +37,21 @@ body .app-shell > header.app-brand-plain[hidden] {
   background: var(--nav-bg);
   border-bottom: 1px solid var(--nav-line);
   box-shadow: 0 6px 20px rgba(15, 10, 40, 0.28);
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Trang chủ: menu nổi trên video, trong suốt khi ở đầu trang. Mở khung menu điện thoại thì
+   vẫn dùng nền tối để đọc được danh sách. */
+body.is-home .site-header {
+  position: fixed;
+  left: 0;
+  right: 0;
+}
+
+body.is-home .site-header.is-over-hero:not(.is-open) {
+  background-color: transparent;
+  border-bottom-color: transparent;
+  box-shadow: none;
 }
 
 .site-header-inner {
@@ -126,6 +141,18 @@ body .app-shell > header.app-brand-plain[hidden] {
 /* style-final-fix.css đặt span { font-weight: 400 }, mục có nhánh sẽ mảnh hơn mục thường */
 #mainNav .nav-link > span {
   font-weight: inherit;
+}
+
+/* Mục dùng icon (Tài khoản, Tùy chỉnh): thanh ngang chỉ có icon, tên mục ở aria-label + title */
+.nav-icon {
+  display: block;
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.nav-link-icon .nav-label {
+  display: none;
 }
 
 #mainNav .nav-link:hover,
@@ -325,6 +352,20 @@ body .app-shell > header.app-brand-plain[hidden] {
   transform: none;
 }
 
+/* Menu điện thoại: icon kèm chữ, chữ nằm sát icon, dấu cộng ở cuối hàng */
+.site-header.is-compact #mainNav .nav-link-icon {
+  justify-content: flex-start;
+  gap: 0.6rem;
+}
+
+.site-header.is-compact .nav-link-icon .nav-label {
+  display: inline;
+}
+
+.site-header.is-compact .nav-link-icon .nav-caret {
+  margin-left: auto;
+}
+
 /* Đổi mũi tên thành dấu cộng / trừ */
 .site-header.is-compact .nav-caret {
   width: 1.5rem;
@@ -390,93 +431,130 @@ body .app-shell > header.app-brand-plain[hidden] {
 
 /* ======================= Trang chủ ======================= */
 
-/* Khung hero. #homeView > section ở style-final-fix.css là thẻ panel dùng !important
-   (nền trắng, viền, padding), nên phải !important để thắng. */
+/* Bỏ lề của khung app để video tràn hết màn hình. !important vì style-final-fix.css đặt
+   lề và độ rộng của các khung này bằng !important. */
+body.is-home .app-shell {
+  padding: 0 !important;
+}
+
+body.is-home .app-frame {
+  width: 100% !important;
+  gap: 0 !important;
+  padding-top: 0;
+}
+
+/* #homeView > section và #homeView > div trong style-final-fix.css là thẻ panel dùng
+   !important (nền, viền, bóng, padding), nên phải !important để bỏ.
+   Khung cao hơn màn hình: phần dôi ra là quãng cuộn để video mờ dần trong lúc đứng yên.
+   lvh: khi thanh địa chỉ điện thoại thu lại, video vẫn phủ hết màn hình. */
 #homeView > .home-hero {
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  min-height: clamp(15rem, 44vh, 27rem);
-  padding: 2rem 1.25rem !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  height: 170vh;
+  height: 170lvh;
+  padding: 0 !important;
   border: 0 !important;
-  background:
-    var(--hero-poster, none) center / cover no-repeat,
-    linear-gradient(135deg, #2a1a63 0%, #5b34b5 48%, #1f5a9e 100%) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+.home-hero-media {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100lvh;
+  overflow: hidden;
+  background:
+    var(--hero-poster, none) center / cover no-repeat,
+    linear-gradient(135deg, #2a1a63 0%, #5b34b5 48%, #1f5a9e 100%);
+  will-change: opacity;
+}
+
+/* Lớp tối ở mép trên để chữ trắng trên menu đọc được dù video sáng */
+.home-hero-media::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 8rem;
+  background: linear-gradient(180deg, rgba(12, 8, 30, 0.55), rgba(12, 8, 30, 0));
+  pointer-events: none;
+}
+
+/* Có chuột: mép dưới video hoà dần vào nền trang. Điện thoại bỏ qua để cuộn không bị giật,
+   vì mặt nạ trên video tốn sức xử lý đồ hoạ. */
+@media (hover: hover) {
+  .home-hero-media {
+    -webkit-mask-image: linear-gradient(180deg, #000 84%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 84%, transparent 100%);
+  }
 }
 
 .home-hero-video {
   position: absolute;
   inset: 0;
-  z-index: -2;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* Lớp phủ tối để chữ dễ đọc trên video */
-.home-hero-overlay {
+/* Tiêu đề chỉ dành cho trình đọc màn hình, trên video không có chữ. */
+#homeView .home-hero-title {
   position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(180deg, rgba(20, 12, 50, 0.35), rgba(20, 12, 50, 0.6));
-}
-
-.home-hero-content {
-  max-width: 44rem;
-}
-
-#homeView .home-hero-content h1 {
-  margin: 0 0 0.6rem;
-  color: #ffffff !important;
-  font-size: clamp(1.75rem, 4.2vw, 3rem);
-  font-weight: 700 !important;
-  line-height: 1.15;
-  text-wrap: balance;
-}
-
-#homeView .home-hero-content p {
-  margin: 0;
-  color: #ece7ff !important;
-  font-size: clamp(1rem, 1.6vw, 1.2rem);
-  line-height: 1.5;
-}
-
-.resume-list {
-  list-style: none;
-  margin: 0.75rem 0 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
   padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Giảm chuyển động: không có quãng cuộn và không mờ dần, nền tĩnh cuộn đi như bình thường. */
+@media (prefers-reduced-motion: reduce) {
+  #homeView > .home-hero {
+    height: 100vh;
+    height: 100svh;
+  }
+
+  .home-hero-media {
+    position: static;
+    height: 100%;
+    will-change: auto;
+  }
+}
+
+/* Chỗ chèn thêm khối giữa video và chân trang. Tự ẩn khi trống. */
+#homeView > .home-content {
   display: grid;
-  gap: 0.75rem;
+  gap: 22px;
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: clamp(14px, 2.5vw, 28px) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-.resume-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
+#homeView > .home-content:empty {
+  display: none;
 }
 
-.resume-info {
-  display: grid;
-  gap: 0.2rem;
-  min-width: 0;
+.home-footer {
+  padding: 1.25rem clamp(14px, 2.5vw, 28px) 1.5rem;
+  text-align: center;
+  border-top: 1px solid var(--app-border);
 }
 
-/* Khối này nằm trong #homeView, luật "#homeView button" thêm margin cho nút */
-#homeView .resume-item .primary-btn {
-  margin: 0 !important;
-  min-width: 7.5rem;
+.home-footer p {
+  margin: 0;
+  line-height: 1.7;
 }
 
 /* ======================= Màn môn học ======================= */
@@ -545,15 +623,16 @@ body .app-shell > header.app-brand-plain[hidden] {
 /* ======================= Thông tin nâng cấp ======================= */
 
 .changelog-list {
-  display: grid;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 .changelog-item {
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.changelog-item:last-child {
+  border-bottom: 0;
 }
 
 .changelog-item > summary {
@@ -641,4 +720,72 @@ body .app-shell > header.app-brand-plain[hidden] {
 .settings-option input:focus-visible + span {
   outline: 2px solid var(--app-accent);
   outline-offset: 2px;
+}
+
+/* ======================= Mỗi trang một lớp khung ======================= */
+
+/* Khu vực nội dung của 12 thì, Từ vựng, Tiếng Trung: các thẻ trong module đã là khung rồi,
+   nên khung ngoài này bỏ đi. !important vì .panel trong style-final-fix.css dùng !important. */
+.panel.tenses-body {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Màn làm bài (cả bài kiểm tra lớp): câu hỏi nằm thẳng trên khung của màn, không có thẻ riêng. */
+.quiz-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Ô tra từ nằm trong khung của màn làm bài, cách nút Câu tiếp theo một khoảng */
+#quizLookup {
+  margin-top: 1rem;
+}
+
+/* Xem lại bài kiểm tra lớp: các câu ngăn cách bằng đường kẻ */
+.quiz-card + .quiz-card {
+  padding-top: 1rem;
+  border-top: 1px solid var(--app-border);
+}
+
+/* Đúng/sai là vạch màu bên trái, không phải một ô nữa */
+.feedback {
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  border: 0;
+  border-left: 3px solid var(--app-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.feedback.correct,
+.feedback.wrong,
+.feedback.incorrect {
+  background: transparent;
+}
+
+/* Lớp học: khung thông tin lớp và kết quả nằm trong #classCard. !important vì .about-card
+   trong style-final-fix.css là thẻ panel dùng !important. */
+#classContent .about-card {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* #dashboardSection không còn là khung nên các thẻ bên trong không cần lề thêm */
+.history-card,
+.leaderboard-card {
+  margin: 0;
 }

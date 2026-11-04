@@ -38,7 +38,7 @@ const CSS = `
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 button, input { font: inherit; color: inherit; }
-.box { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); box-shadow: 0 8px 24px rgba(15, 23, 42, .08); }
+.box { display: grid; gap: 12px; padding: 16px 0 0; border-top: 1px solid var(--line); }
 .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .head h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--accent-2); }
 .toggle { appearance: none; border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 0.8125rem; font-weight: 600; padding: 4px 6px; border-radius: 8px; }

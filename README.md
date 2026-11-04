@@ -12,7 +12,7 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `style.css` | Giao diện nền |
 | `style-final-fix.css` | Lớp ghi đè giao diện, nạp sau `style.css` |
 | `theme.css` | Biến màu của giao diện sáng/tối, cỡ chữ, font. Biến `--app-*` dùng chung cho cả 3 mục con trong Shadow DOM |
-| `menu.css` | Menu ngang, hero Trang chủ, Bài đang làm dở, tab Tiếng Anh, Tùy chỉnh |
+| `menu.css` | Menu ngang, Trang chủ (video, chân trang), tab Tiếng Anh, Tùy chỉnh, luật "mỗi trang một lớp khung" |
 | `reset-password.html` / `reset-password.js` | Trang đặt lại mật khẩu từ email |
 | `sw.js` | Service worker (PWA, cache offline) |
 | `manifest.webmanifest` | Khai báo PWA (tên, icon, theme) |
@@ -33,7 +33,7 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 - Luyện tập (không giới hạn thời gian) và thi thử 30 câu/20 phút hoặc 70 câu/60 phút
 - Hiện đúng/sai ngay khi chọn đáp án, kèm giải thích nếu câu hỏi có cột `explanation`
 - Tự lưu bài đang làm dở theo từng tài khoản + từng môn, cho phép tạm dừng và làm tiếp
-  (Trang chủ có khối "Bài đang làm dở" liệt kê bài của mọi môn)
+  (nút Tiếp tục nằm ở màn của môn đó; rời app quá 10 phút thì quay về đúng màn môn học)
 - Làm lại các câu sai gần nhất (không tính giờ, không tính điểm BXH)
 - Lịch sử ôn tập và bảng xếp hạng theo từng môn
 - Tùy chỉnh: giao diện Sáng / Tối / Theo hệ thống, cỡ chữ, font chữ
@@ -118,9 +118,14 @@ chủ đích, dự kiến bổ sung ở Phase 2/3):
 - **Menu**: đầu `app.js` có `MENU_HIDDEN_SUBJECTS` (môn tạm ẩn khỏi menu) và
   `MENU_SUBJECT_ORDER` (thứ tự môn). Thêm môn mới trên Supabase thì menu tự cập nhật,
   môn chưa có trong danh sách thứ tự được xếp cuối.
-- **Video Trang chủ**: đầu `app.js` có `HOME_HERO_VIDEO_URL` và `HOME_HERO_POSTER_URL`.
-  Để trống hoặc người dùng bật "giảm chuyển động" thì hiện nền gradient / poster.
-  Nên nén video dưới khoảng 5 MB, 720p, H.264/MP4 hoặc WebM.
+- **Trang chủ**: chỉ có menu, video toàn màn hình và chân trang. Đầu `app.js` có
+  `HOME_HERO_VIDEO_URL` và `HOME_HERO_POSTER_URL`. Để trống hoặc người dùng bật "giảm
+  chuyển động" thì hiện nền tĩnh (gradient hoặc poster). Nên nén video dưới khoảng 5 MB,
+  720p, H.264/MP4 hoặc WebM. Muốn thêm khối thì đặt vào `#homeContent` trong `index.html`,
+  khung này nằm giữa video và chân trang và tự ẩn khi trống.
+- **Một lớp khung**: mỗi trang chỉ có một lớp khung. `#dashboardSection` và khung nội dung
+  của 3 module không phải là khung, thẻ bên trong mới là khung. Trong thẻ thì dùng đường
+  kẻ hoặc vạch màu bên trái, không lồng thêm ô.
 - **Tùy chỉnh**: lưu ở `localStorage` khóa `quizapp-settings-v1`. Đoạn script đầu
   `<head>` trong `index.html` áp dụng trước khi trang hiện để không bị nháy sáng/tối.
   Đổi màu thì sửa `theme.css`, cả khối sáng lẫn tối. CSS đã dùng `rem` cho `font-size`,
