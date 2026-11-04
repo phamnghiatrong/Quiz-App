@@ -1,0 +1,242 @@
+/* theme.css - Màu, cỡ chữ và font theo mục Tùy chỉnh (settings.js).
+   Đoạn script đầu <head> của index.html đặt data-theme, data-font-size, data-font lên
+   <html> trước khi trang hiện nên không bị nháy.
+
+   Biến --app-* khai báo ở đây có kế thừa xuyên Shadow DOM: tenses.css, vocab.css,
+   chinese.css và CSS trong vocab-mini.js đọc lại chúng trên :host, nên cả 3 mục con
+   đổi theme mà không cần sửa logic JS. Không dùng :host-context() vì Firefox và
+   Safari không hỗ trợ.
+
+   Muốn đổi màu: sửa ở đây, cả khối :root (sáng) lẫn [data-theme="dark"] (tối). */
+
+:root {
+  --app-font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --app-font: var(--app-font-system);
+
+  --app-page-bg:
+    radial-gradient(circle at 12% 8%, rgba(186, 230, 253, 0.55), transparent 32rem),
+    radial-gradient(circle at 90% 4%, rgba(221, 214, 254, 0.55), transparent 30rem),
+    radial-gradient(circle at 85% 92%, rgba(251, 207, 232, 0.45), transparent 30rem),
+    linear-gradient(135deg, #f8fafc 0%, #eef2ff 54%, #fdf2f8 100%);
+
+  /* Nền */
+  --app-surface-solid: #ffffff;
+  --app-surface-2: #f1f5f9;
+  --app-surface-3: #f8f7ff;
+  --app-surface-tint: #fbfaff;
+  --app-card: rgba(255, 255, 255, 0.98);
+  --app-card-2: rgba(255, 255, 255, 0.96);
+  --app-input-bg: rgba(255, 255, 255, 0.94);
+  --app-btn-bg: rgba(255, 255, 255, 0.92);
+  --app-th-bg: rgba(248, 250, 252, 0.88);
+  --app-th-solid: #f8fafc;
+  --app-hover-soft: #faf5ff;
+  --app-face-top: #f5f3ff;
+
+  /* Chữ */
+  --app-ink: #1e293b;
+  --app-ink-2: #334155;
+  --app-ink-3: #475569;
+  --app-ink-accent: #3b2a8f;
+  --app-btn-ink: #334155;
+  /* Chữ trên nền đặc màu tím / xanh / đỏ (mục đang chọn, đúng, sai) */
+  --app-on-fill: #ffffff;
+
+  /* Viền */
+  --app-line: rgba(148, 163, 184, 0.32);
+  --app-line-strong: rgba(148, 163, 184, 0.6);
+  --app-input-line: rgba(148, 163, 184, 0.36);
+  --app-note-line: rgba(15, 23, 42, 0.12);
+
+  /* Tím */
+  --app-accent: #8b5cf6;
+  --app-accent-2: #6d28d9;
+  --app-accent-soft: #ede9fe;
+  --app-accent-soft-2: #ddd6fe;
+  --app-tile-line: #c4b5fd;
+
+  /* Trạng thái */
+  --app-ok: #15803d;
+  --app-ok-soft: #dcfce7;
+  --app-ok-tint: #f3fbf5;
+  --app-bad: #dc2626;
+  --app-bad-soft: #fee2e2;
+  --app-bad-tint: #fff7f7;
+  --app-bad-ink: #991b1b;
+  --app-warn: #b45309;
+  --app-warn-soft: #fef3c7;
+  --app-warn-tint: #fffbeb;
+  --app-warn-ink: #78350f;
+  --app-mark-bg: #fecaca;
+  --app-mark-ink: #7f1d1d;
+  --app-dot-idle: #cbd5e1;
+  --app-kbd-bg: rgba(15, 23, 42, 0.07);
+
+  /* Khung phản hồi đúng/sai ở màn làm bài */
+  --app-fb-ok-bg: #ecfdf5;
+  --app-fb-ok-line: #a7f3d0;
+  --app-fb-ok-ink: #166534;
+  --app-fb-bad-bg: #fef2f2;
+  --app-fb-bad-line: #fecaca;
+  --app-fb-bad-ink: #b91c1c;
+  --app-note-ink: #b45309;
+
+  /* Mục 12 thì: màu theo thời */
+  --app-past: #2f55d4;
+  --app-past-soft: #e7ecfd;
+  --app-present: #15855a;
+  --app-present-soft: #e0f3ea;
+  --app-future: #b45f0c;
+  --app-future-soft: #faeddc;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --app-page-bg:
+    radial-gradient(circle at 12% 8%, rgba(76, 52, 156, 0.35), transparent 32rem),
+    radial-gradient(circle at 90% 4%, rgba(49, 46, 129, 0.35), transparent 30rem),
+    radial-gradient(circle at 85% 92%, rgba(112, 26, 117, 0.22), transparent 30rem),
+    linear-gradient(135deg, #0f0c1d 0%, #14102a 54%, #170f26 100%);
+
+  /* Biến có sẵn trong style-final-fix.css */
+  --app-bg: #0f0c1d;
+  --app-bg-2: #14102a;
+  --app-bg-3: #170f26;
+  --app-surface: rgba(30, 25, 56, 0.92);
+  --app-surface-strong: rgba(30, 25, 56, 0.98);
+  --app-text: #ece9f8;
+  --app-muted: #a9a4c4;
+  --app-primary: #a78bfa;
+  --app-primary-2: #c4b5fd;
+  --app-primary-soft: rgba(139, 92, 246, 0.24);
+  --app-border: rgba(169, 164, 196, 0.26);
+  --app-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+  --app-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.3);
+
+  /* Biến có sẵn trong style.css */
+  --bg: #0f0c1d;
+  --panel: rgba(30, 25, 56, 0.9);
+  --panel-2: rgba(36, 30, 66, 0.95);
+  --line: rgba(169, 164, 196, 0.28);
+  --text: #ece9f8;
+  --muted: #a9a4c4;
+  --accent: #a78bfa;
+  --accent-rgb: 167, 139, 250;
+  --accent-2: #c4b5fd;
+  --primary-soft: rgba(139, 92, 246, 0.24);
+  --blue-soft: rgba(56, 130, 200, 0.2);
+  --danger: #f87171;
+  --success: #4ade80;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+
+  /* Nền */
+  --app-surface-solid: #1e1938;
+  --app-surface-2: #282247;
+  --app-surface-3: #231d40;
+  --app-surface-tint: #241e42;
+  --app-card: #241e42;
+  --app-card-2: rgba(30, 25, 56, 0.96);
+  --app-input-bg: #17132c;
+  --app-btn-bg: #282247;
+  --app-th-bg: rgba(255, 255, 255, 0.05);
+  --app-th-solid: #282247;
+  --app-hover-soft: rgba(139, 92, 246, 0.14);
+  --app-face-top: #2a2350;
+
+  /* Chữ */
+  --app-ink: #ece9f8;
+  --app-ink-2: #d6d2ea;
+  --app-ink-3: #c2bddb;
+  --app-ink-accent: #cdbfff;
+  --app-btn-ink: #dcd8ee;
+  /* Ở giao diện tối các màu nền đặc sáng hơn nên chữ phải tối, chữ trắng gần như không đọc được. */
+  --app-on-fill: #17122b;
+
+  /* Viền */
+  --app-line: rgba(169, 164, 196, 0.28);
+  --app-line-strong: rgba(169, 164, 196, 0.5);
+  --app-input-line: rgba(169, 164, 196, 0.4);
+  --app-note-line: rgba(255, 255, 255, 0.14);
+
+  /* Tím */
+  --app-accent: #a78bfa;
+  --app-accent-2: #c4b5fd;
+  --app-accent-soft: rgba(139, 92, 246, 0.24);
+  --app-accent-soft-2: rgba(139, 92, 246, 0.38);
+  --app-tile-line: #6d5bb0;
+
+  /* Trạng thái */
+  --app-ok: #4ade80;
+  --app-ok-soft: rgba(34, 197, 94, 0.18);
+  --app-ok-tint: rgba(34, 197, 94, 0.1);
+  --app-bad: #f87171;
+  --app-bad-soft: rgba(239, 68, 68, 0.2);
+  --app-bad-tint: rgba(239, 68, 68, 0.1);
+  --app-bad-ink: #fca5a5;
+  --app-warn: #fbbf24;
+  --app-warn-soft: rgba(245, 158, 11, 0.2);
+  --app-warn-tint: rgba(245, 158, 11, 0.1);
+  --app-warn-ink: #fcd34d;
+  --app-mark-bg: rgba(239, 68, 68, 0.35);
+  --app-mark-ink: #fecaca;
+  --app-dot-idle: #5f5a82;
+  --app-kbd-bg: rgba(255, 255, 255, 0.12);
+
+  --app-fb-ok-bg: rgba(34, 197, 94, 0.14);
+  --app-fb-ok-line: rgba(34, 197, 94, 0.45);
+  --app-fb-ok-ink: #86efac;
+  --app-fb-bad-bg: rgba(239, 68, 68, 0.14);
+  --app-fb-bad-line: rgba(239, 68, 68, 0.45);
+  --app-fb-bad-ink: #fca5a5;
+  --app-note-ink: #fbbf24;
+
+  --app-past: #9db4ff;
+  --app-past-soft: rgba(99, 130, 255, 0.2);
+  --app-present: #5fd3a4;
+  --app-present-soft: rgba(52, 190, 135, 0.18);
+  --app-future: #f0b072;
+  --app-future-soft: rgba(234, 150, 60, 0.2);
+}
+
+/* Font: chỉ tải từ Google Fonts khi người dùng chọn (script đầu <head>) */
+[data-font="be-vietnam-pro"] { --app-font: "Be Vietnam Pro", var(--app-font-system); }
+[data-font="inter"] { --app-font: "Inter", var(--app-font-system); }
+[data-font="roboto"] { --app-font: "Roboto", var(--app-font-system); }
+
+/* Cỡ chữ: toàn bộ CSS đã đổi font-size sang rem nên chỉ cần đổi ở đây. */
+html { font-size: 16px; }
+html[data-font-size="sm"] { font-size: 14px; }
+html[data-font-size="lg"] { font-size: 18px; }
+
+/* select/textarea mặc định không theo cỡ chữ của trang (13.33px): giữ độ lớn cũ nhưng có scale. */
+select,
+textarea {
+  font-size: 0.8333rem;
+}
+
+/* Điện thoại: iOS tự phóng to trang khi ô nhập có chữ dưới 16px, nhất là ở cỡ Nhỏ. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+}
+
+/* Màu đáp án đúng/sai/đang chọn. Luật button:not(...) trong style-final-fix.css ép nền trắng
+   bằng !important nên màu trong style.css (không có !important) chưa bao giờ hiện ra. */
+:is(#quizCard, #classContent) .option-btn.selected {
+  border-color: var(--accent) !important;
+  background: rgba(var(--accent-rgb), 0.12) !important;
+}
+
+:is(#quizCard, #classContent) .option-btn.correct {
+  border-color: var(--success) !important;
+  background: rgba(34, 197, 94, 0.14) !important;
+}
+
+:is(#quizCard, #classContent) .option-btn.wrong {
+  border-color: var(--danger) !important;
+  background: rgba(239, 68, 68, 0.14) !important;
+}

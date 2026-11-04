@@ -37,7 +37,7 @@ body {
   min-height: 100vh;
   position: relative;
   isolation: isolate;
-  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #fdf2f8 100%);
+  background: var(--app-page-bg);
 }
 
 button, input { font: inherit; }
@@ -310,11 +310,11 @@ h3 { font-size: 1.08rem; margin-bottom: 0.3rem; }
 .primary-btn { background: var(--accent); color: white; border-color: transparent; font-weight: 700; } /* Updated color */
 .primary-btn:hover { background: var(--accent-2); color: white; border-color: transparent; } /* Updated hover color */
 .ghost-btn {
-  background: white;
-  color: #334155;
+  background: var(--app-btn-bg);
+  color: var(--app-btn-ink);
   border: 1px solid rgba(148, 163, 184, 0.35);
 }
-.ghost-btn:hover { background: #f8fafc; }
+.ghost-btn:hover { background: var(--app-surface-2); }
 .auth-form { display: grid; gap: 10px; margin-top: 14px; }
 .auth-form input {
   width: 100%;
@@ -575,7 +575,7 @@ body::before, body::after, .rainbow-clouds { display: none !important; }
 }
 
 .subject-card .subject-slug {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: #64748b;
 }
 

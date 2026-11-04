@@ -7,6 +7,7 @@ import {
   CAPTCHA_REQUIRED_MESSAGE,
   CAPTCHA_FAILED_MESSAGE,
 } from './captcha.js?v=20261009-1';
+import { initSettings } from './settings.js?v=20261104-1';
 
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
 
@@ -1392,7 +1393,9 @@ function setupMainNav() {
   });
 
   window.addEventListener('resize', syncNavCompact);
+  // Font chữ tải xong thì độ rộng menu đổi, phải đo lại.
   document.fonts?.ready?.then(syncNavCompact);
+  document.fonts?.addEventListener?.('loadingdone', syncNavCompact);
 }
 
 // Rời màn làm bài: lưu bài vào localStorage rồi xoá khỏi bộ nhớ. Bắt buộc phải xoá, vì
@@ -4222,6 +4225,7 @@ function wireClassEvents() {
 function wireEvents() {
   setupMainNav();
   setupEnglishTabs();
+  if (elements.settingsCard) initSettings(elements.settingsCard, { onApplied: syncNavCompact });
 
   elements.modeChips.forEach((chip) => {
     chip.addEventListener('click', () => setAuthMode(chip.dataset.authMode));
@@ -4390,7 +4394,7 @@ function showAppNotice(message) {
     el.id = 'appNotice';
     el.setAttribute('role', 'status');
     // Đặt dưới thanh menu, z-index thấp hơn header (100) để menu mở ra không bị che.
-    el.style.cssText = 'position:fixed;left:50%;top:calc(var(--site-header-h, 0px) + 12px);transform:translateX(-50%);z-index:90;max-width:min(92vw,560px);padding:12px 16px;border-radius:12px;background:#1e293b;color:#fff;font-size:15px;line-height:1.45;box-shadow:0 10px 30px rgba(15,23,42,.25);cursor:pointer';
+    el.style.cssText = 'position:fixed;left:50%;top:calc(var(--site-header-h, 0px) + 12px);transform:translateX(-50%);z-index:90;max-width:min(92vw,560px);padding:12px 16px;border-radius:12px;background:#1e293b;color:#fff;font-size:0.9375rem;line-height:1.45;border:1px solid rgba(148,163,184,.35);box-shadow:0 10px 30px rgba(15,23,42,.25);cursor:pointer';
     el.addEventListener('click', () => { el.hidden = true; });
     document.body.appendChild(el);
   }

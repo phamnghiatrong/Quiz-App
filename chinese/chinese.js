@@ -682,7 +682,7 @@ function build({ host, nav, key, data, css, zapi, supabase, scrollAnchor }) {
       stage = `<div class="prompt-box${picHidden(c, S) ? ' no-pic' : ''}">${picHidden(c, S) ? '' : img(c)}<div>
           <div class="q-sent">${parts.join(blank)}</div>
           ${S.answered ? `<div class="py py-opt" style="text-align:center">${esc(c.exPy)}</div>` : ''}
-          <div class="q-vi" style="font-size:17px;font-weight:600;text-align:center">${esc(c.exVi)}</div>
+          <div class="q-vi" style="font-size:1.0625rem;font-weight:600;text-align:center">${esc(c.exVi)}</div>
           <div class="en-opt muted" style="text-align:center">${esc(c.exEn)}</div>
         </div></div>
         <p class="q-ask">Chọn chữ điền vào chỗ trống</p>`;

@@ -27,14 +27,57 @@
     <meta name="theme-color" content="#f8fafc" />
     <link rel="apple-touch-icon" href="./public/favicon.png" />
     
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Áp dụng Tùy chỉnh TRƯỚC khi trang hiện để không bị nháy sáng/tối. settings.js dùng lại
+         read() và apply() qua window.__quizSettings. Font Google chỉ tải khi người dùng chọn. -->
+    <script>
+      (function () {
+        var KEY = 'quizapp-settings-v1';
+        var FONTS = {
+          'be-vietnam-pro': 'Be+Vietnam+Pro:wght@400;500;600;700;800',
+          'inter': 'Inter:wght@400;500;600;700;800',
+          'roboto': 'Roboto:wght@400;500;700;900'
+        };
+        function hasFont(name) {
+          return Object.prototype.hasOwnProperty.call(FONTS, name);
+        }
+        function read() {
+          var saved = {};
+          try {
+            saved = JSON.parse(localStorage.getItem(KEY)) || {};
+          } catch (e) {}
+          return {
+            theme: saved.theme === 'light' || saved.theme === 'dark' ? saved.theme : 'system',
+            fontSize: saved.fontSize === 'sm' || saved.fontSize === 'lg' ? saved.fontSize : 'md',
+            fontFamily: hasFont(saved.fontFamily) ? saved.fontFamily : 'system'
+          };
+        }
+        function apply(settings) {
+          var root = document.documentElement;
+          var dark = settings.theme === 'dark' ||
+            (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          root.setAttribute('data-theme', dark ? 'dark' : 'light');
+          root.setAttribute('data-font-size', settings.fontSize);
+          root.setAttribute('data-font', settings.fontFamily);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#0f0c1d' : '#f8fafc');
+          if (hasFont(settings.fontFamily)) {
+            var link = document.getElementById('appFontLink');
+            if (!link) {
+              link = document.createElement('link');
+              link.id = 'appFontLink';
+              link.rel = 'stylesheet';
+              document.head.appendChild(link);
+            }
+            link.href = 'https://fonts.googleapis.com/css2?family=' + FONTS[settings.fontFamily] + '&display=swap';
+          }
+        }
+        window.__quizSettings = { KEY: KEY, read: read, apply: apply };
+        apply(read());
+      })();
+    </script>
     <link rel="stylesheet" href="./style.css" />
     <link rel="stylesheet" href="./style-final-fix.css?v=20261005-1" />
+    <link rel="stylesheet" href="./theme.css?v=20261104-1" />
     <link rel="stylesheet" href="./menu.css?v=20261104-1" />
     <style>
       /* Đảm bảo thuộc tính hidden luôn có tác dụng và không bị ghi đè bởi CSS khác */
@@ -74,7 +117,7 @@
         border: none !important;
         border-radius: 50% !important;
         background: transparent !important;
-        color: #64748b !important;
+        color: var(--app-muted) !important;
         cursor: pointer !important;
         line-height: 0 !important;
         box-shadow: none !important;
@@ -82,7 +125,7 @@
       .password-toggle-btn:hover,
       .password-toggle-btn:focus-visible {
         transform: translateY(-50%) !important;
-        color: #1e293b !important;
+        color: var(--app-ink) !important;
         background: rgba(100, 116, 139, 0.14) !important;
         box-shadow: none !important;
       }
@@ -193,23 +236,23 @@
           min-width: 0 !important;
         }
         :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-hint {
-          font-size: 12px !important;
+          font-size: 0.75rem !important;
           font-weight: 600 !important;
-          color: #64748b !important;
+          color: var(--app-muted) !important;
           text-transform: uppercase !important;
           letter-spacing: 0.06em !important;
         }
         :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-current {
-          font-size: 16px !important;
+          font-size: 1rem !important;
           font-weight: 700 !important;
-          color: #6d28d9 !important;
+          color: var(--app-accent-2) !important;
           white-space: nowrap !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
         }
         :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-caret {
-          color: #8b5cf6 !important;
-          font-size: 13px !important;
+          color: var(--app-accent) !important;
+          font-size: 0.8125rem !important;
         }
         :is(#tensesNav, #chineseNav, #vocabNav) .tn-nav-list {
           display: none !important;

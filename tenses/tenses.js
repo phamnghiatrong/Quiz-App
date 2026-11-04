@@ -119,7 +119,7 @@ function build({ host, nav, key, data, css, scrollAnchor }) {
         <dt class="t-past">Quá khứ</dt><dd>did · was/were · had</dd>
         <dt class="t-future">Tương lai</dt><dd>will (+ be / have …)</dd>
       </dl>
-      <p style="font-size:15px">Ví dụ với thể <b>hoàn thành tiếp diễn</b> (đuôi <code>have been + V-ing</code>): chỉ cần đổi <code>have</code> theo thời:</p>
+      <p style="font-size:0.9375rem">Ví dụ với thể <b>hoàn thành tiếp diễn</b> (đuôi <code>have been + V-ing</code>): chỉ cần đổi <code>have</code> theo thời:</p>
       <div class="eq"><span>has/have been working</span><span>had been working</span><span>will have been working</span></div>
       <p class="note">V3 = quá khứ phân từ (cột 3 bảng động từ bất quy tắc, hoặc V-ed với động từ có quy tắc).</p>
     </div>

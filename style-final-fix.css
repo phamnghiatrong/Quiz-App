@@ -29,12 +29,8 @@ body {
   min-height: 100%;
   margin: 0;
   color: var(--app-text) !important;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(186, 230, 253, 0.55), transparent 32rem),
-    radial-gradient(circle at 90% 4%, rgba(221, 214, 254, 0.55), transparent 30rem),
-    radial-gradient(circle at 85% 92%, rgba(251, 207, 232, 0.45), transparent 30rem),
-    linear-gradient(135deg, #f8fafc 0%, #eef2ff 54%, #fdf2f8 100%) !important;
+  font-family: var(--app-font) !important;
+  background: var(--app-page-bg) !important;
   overflow-x: hidden;
 }
 
@@ -179,7 +175,7 @@ h2, h3 {
 
 label {
   font-weight: 700 !important;
-  color: #334155 !important;
+  color: var(--app-ink-2) !important;
 }
 
 input,
@@ -188,9 +184,9 @@ select {
   width: 100% !important;
   min-height: 46px !important;
   padding: 11px 13px !important;
-  border: 1px solid rgba(148, 163, 184, 0.36) !important;
+  border: 1px solid var(--app-input-line) !important;
   border-radius: 14px !important;
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: var(--app-input-bg) !important;
   color: var(--app-text) !important;
   outline: none !important;
   box-shadow: none !important;
@@ -243,8 +239,8 @@ button[data-active="true"] {
 .ghost-btn,
 .mode-chip,
 button:not(.primary-btn):not(.sidebar-item):not(.subject-card-final) {
-  background: rgba(255, 255, 255, 0.92) !important;
-  color: #334155 !important;
+  background: var(--app-btn-bg) !important;
+  color: var(--app-btn-ink) !important;
 }
 
 .auth-mode-switch,
@@ -428,8 +424,8 @@ th, td {
 }
 
 th {
-  color: #475569 !important;
-  background: rgba(248, 250, 252, 0.88) !important;
+  color: var(--app-ink-3) !important;
+  background: var(--app-th-bg) !important;
 }
 
 /* Mobile */
@@ -515,7 +511,7 @@ th {
   display: block !important;
   width: 100% !important;
   text-align: center !important;
-  font-size: 22px !important;
+  font-size: 1.375rem !important;
   font-weight: 800 !important;
   line-height: 1.25 !important;
 }
@@ -591,7 +587,7 @@ th {
   }
 
   .subject-name-final {
-    font-size: 17px !important;
+    font-size: 1.0625rem !important;
     font-weight: 800 !important;
     line-height: 1.2 !important;
     text-align: center !important;
@@ -1187,7 +1183,7 @@ body:has(#authSection:not([hidden])) .app-shell > .app-brand-full {
 
 .review-content {
   margin: 0 !important;
-  font-size: 16px !important;
+  font-size: 1rem !important;
   line-height: 1.6 !important;
   font-weight: 600 !important;
 }
@@ -1199,7 +1195,7 @@ body:has(#authSection:not([hidden])) .app-shell > .app-brand-full {
   border-top: 1px solid rgba(148, 163, 184, 0.18) !important;
 
   color: var(--app-muted) !important;
-  font-size: 14px !important;
+  font-size: 0.875rem !important;
   font-weight: 700 !important;
 }
 
@@ -1223,11 +1219,11 @@ body:has(#authSection:not([hidden])) .app-shell > .app-brand-full {
   }
 
   .review-content {
-    font-size: 15px !important;
+    font-size: 0.9375rem !important;
   }
 
   .review-student {
-    font-size: 13px !important;
+    font-size: 0.8125rem !important;
   }
 }
 /* Căn đều nội dung thông báo từ nhà phát triển */
@@ -1246,14 +1242,7 @@ button,
 input,
 select,
 textarea {
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    sans-serif !important;
+  font-family: var(--app-font) !important;
 }
 
 /* Tiêu đề không quá đậm */
@@ -1294,7 +1283,7 @@ button {
 #homeView .subject-page-title {
   margin: 0 0 12px !important;
   color: #8b5cf6 !important;
-  font-size: 30px !important;
+  font-size: 1.875rem !important;
   line-height: 1.15 !important;
   font-weight: 600 !important;
   letter-spacing: 0.04em !important;
@@ -1304,7 +1293,7 @@ button {
 
 @media (max-width: 768px) {
   #homeView .subject-page-title {
-    font-size: 30px !important;
+    font-size: 1.875rem !important;
   }
 }
 
@@ -1352,7 +1341,7 @@ button {
    ========================================================= */
 
 #homeView .review-section {
-  background: rgba(255, 255, 255, 0.96) !important;
+  background: var(--app-card-2) !important;
 }
 
 #homeView .review-grid {
@@ -1372,10 +1361,10 @@ button {
   gap: 20px !important;
 
   /* Nền sáng, chữ tương phản rõ */
-  background: rgba(255, 255, 255, 0.98) !important;
-  color: #1e293b !important;
+  background: var(--app-card) !important;
+  color: var(--app-ink) !important;
 
-  border: 1px solid rgba(148, 163, 184, 0.32) !important;
+  border: 1px solid var(--app-line) !important;
   border-radius: 20px !important;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;
 
@@ -1385,10 +1374,10 @@ button {
 #homeView .review-content {
   margin: 0 !important;
 
-  color: #1e293b !important;
+  color: var(--app-ink) !important;
   opacity: 1 !important;
 
-  font-size: 17px !important;
+  font-size: 1.0625rem !important;
   line-height: 1.65 !important;
   font-weight: 500 !important;
   letter-spacing: normal !important;
@@ -1398,12 +1387,12 @@ button {
   margin: 0 !important;
   padding-top: 15px !important;
 
-  color: #475569 !important;
+  color: var(--app-ink-3) !important;
   opacity: 1 !important;
 
-  border-top: 1px solid rgba(148, 163, 184, 0.28) !important;
+  border-top: 1px solid var(--app-border) !important;
 
-  font-size: 14px !important;
+  font-size: 0.875rem !important;
   line-height: 1.5 !important;
   font-weight: 600 !important;
   letter-spacing: normal !important;
@@ -1443,12 +1432,12 @@ button {
   }
 
   #homeView .review-content {
-    font-size: 16px !important;
+    font-size: 1rem !important;
     line-height: 1.6 !important;
   }
 
   #homeView .review-student {
-    font-size: 13px !important;
+    font-size: 0.8125rem !important;
   }
 }
 
@@ -1834,21 +1823,21 @@ body:has(#authSection:not([hidden])) .app-shell > header.app-brand-plain {
   }
 
   body #mobileMenuPanel .sidebar-label {
-    font-size: 14px !important;
+    font-size: 0.875rem !important;
   }
 }
 /* Khung phản hồi + giải thích: màu cho nền sáng (trước đây dùng màu nền tối nên chữ gần như trắng) */
 .feedback.correct {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #166534;
+  background: var(--app-fb-ok-bg);
+  border: 1px solid var(--app-fb-ok-line);
+  color: var(--app-fb-ok-ink);
 }
 
 .feedback.incorrect,
 .feedback.wrong {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
+  background: var(--app-fb-bad-bg);
+  border: 1px solid var(--app-fb-bad-line);
+  color: var(--app-fb-bad-ink);
 }
 
 .feedback-result {
@@ -1858,16 +1847,16 @@ body:has(#authSection:not([hidden])) .app-shell > header.app-brand-plain {
 .answer-explanation {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(15, 23, 42, 0.12);
+  border-top: 1px solid var(--app-note-line);
   line-height: 1.6;
 }
 
 .answer-explanation strong {
   display: block;
   margin-bottom: 5px;
-  color: #b45309;
+  color: var(--app-note-ink);
 }
 
 .answer-explanation span {
-  color: #1e293b;
+  color: var(--app-ink);
 }
