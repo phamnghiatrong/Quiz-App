@@ -33,11 +33,29 @@ const supabase = configError
 const LEGACY_QUIZ_DRAFT_KEY = 'politics_quiz_draft';
 const QUIZ_DRAFT_PREFIX = 'quiz-progress';
 
+// Hai môn này tạm ẩn khỏi menu (chủ dự án sẽ thêm lại sau). Chỉ ẩn trên menu:
+// dữ liệu vẫn còn, Lịch sử / Lớp học vẫn hiện đúng tên môn. Muốn hiện lại thì
+// xoá slug khỏi mảng này.
+const MENU_HIDDEN_SUBJECTS = ['co-so-du-lieu', 'tieng-anh-chuyen-nganh-tt-mmt'];
+// Thứ tự môn trong menu. Môn có slug không nằm ở đây thì xếp cuối.
+const MENU_SUBJECT_ORDER = [
+  'tieng-anh-1',
+  'tieng-anh-2',
+  'mang-cap-quang',
+  'ky-nang-mem',
+  'phap-luat',
+  'gdqp-an',
+  'chinh-tri',
+];
+
 
 const elements = {
-    sidebar: document.getElementById('sidebar'),
-  sidebarToggle: document.getElementById('sidebarToggle'),
-  sidebarItems: document.querySelectorAll('.sidebar-item[data-nav]'),
+  siteHeader: document.getElementById('siteHeader'),
+  siteBrand: document.getElementById('siteBrand'),
+  brandPlain: document.getElementById('brandPlain'),
+  navToggle: document.getElementById('navToggle'),
+  mainNav: document.getElementById('mainNav'),
+  navList: document.getElementById('navList'),
 
   authSection: document.getElementById('authSection'),
   dashboardSection: document.getElementById('dashboardSection'),
@@ -45,6 +63,10 @@ const elements = {
 
 
   homeView: document.getElementById('homeView'),
+  subjectView: document.getElementById('subjectView'),
+  englishTabs: document.getElementById('englishTabs'),
+  changelogCard: document.getElementById('changelogCard'),
+  settingsCard: document.getElementById('settingsCard'),
   lessonSelect: document.getElementById('lessonSelect'),
 
     accountView: document.getElementById('accountView'),
@@ -73,10 +95,6 @@ const elements = {
   sendResetBtn: document.getElementById('sendResetBtn'),
   cancelResetBtn: document.getElementById('cancelResetBtn'),
 
-
-  userBadge: document.getElementById('userBadge'),
-  userEmail: document.getElementById('userEmail'),
-  logoutBtn: document.getElementById('logoutBtn'),
 
     modeChips: document.querySelectorAll('.mode-chip'),
     modeCards: document.querySelectorAll('.mode-card'),
@@ -133,14 +151,6 @@ const elements = {
   confirmSubjectBtn: null,
   announcementCard: null,
   reviewCard: null,
-
-  // Mobile menu elements (created dynamically)
-  mobileMenu: document.getElementById('mobileMenu'),
-  mobileMenuToggle: document.getElementById('mobileMenuToggle'),
-  mobileMenuPanel: document.getElementById('mobileMenuPanel'),
-  mobileUserBadge: null,
-  mobileUserEmail: null,
-  mobileLogoutBtn: null,
 };
 
 
@@ -182,6 +192,7 @@ function resetCaptcha(slotId) {
 let currentMode = null;
 let currentView = 'auth';
 let currentUserId = null; // Dùng để tách bài đang làm theo từng tài khoản
+let currentUserDisplayName = ''; // Họ tên (hoặc email) của tài khoản đang đăng nhập
 let selectedSubjectSlug = null; // Môn đang được click trên UI
 let confirmedSubjectSlug = null; // Môn đã được xác nhận
 
@@ -201,11 +212,11 @@ const FALLBACK_SUBJECTS = [
     { id: 'co-so-du-lieu-id', name: 'Cơ Sở Dữ Liệu', slug: 'co-so-du-lieu' },
     { id: 'ky-nang-mem-id', name: 'Kỹ Năng Mềm', slug: 'ky-nang-mem' },
     { id: 'mang-cap-quang-id', name: 'Mạng Cáp Quang', slug: 'mang-cap-quang' },
+    { id: 'gdqp-an-id', name: 'GDQP&AN', slug: 'gdqp-an' },
 ];
 let availableSubjects = [];
 
 const LAST_WRONG_KEY = 'politics_last_wrong'; // Keep existing key for compatibility
-const SIDEBAR_COLLAPSED_KEY = 'politics_sidebar_collapsed'; // Keep existing key for compatibility
 
 
 
@@ -229,10 +240,17 @@ let quizMode = null;
 // chọn đề thi thử (chỉ set khi click ô 30/70, chưa bắt đầu làm bài)
 let selectedExamType = null;
 
+// Môn đang xem ở Bảng xếp hạng, độc lập với môn đang làm bài.
+let leaderboardSubjectSlug = null;
+
 // draft/paused quiz (đọc từ localStorage qua loadDraft)
 let pausedQuizDraft = null;
 
 
+
+function isAuthed() {
+  return Boolean(currentUserId);
+}
 
 function isInteractionLocked() {
   // Chỉ khóa tương tác khi đang pause ở chế độ thi thử (practice không dùng pause/timer)
@@ -728,14 +746,6 @@ function showSection(sectionName) {
   elements.quizSection.hidden = resolved !== 'quiz';
   if (resolved === 'auth') showCaptcha('authCaptcha');
 
-  if (elements.sidebar) {
-    elements.sidebar.hidden = false; // Luôn hiện thanh menu
-  }
-
-  if (elements.mobileMenu) {
-    elements.mobileMenu.hidden = false; // Luôn hiện thanh menu mobile
-  }
-
   if (elements.pauseBtn) {
     elements.pauseBtn.hidden = resolved !== 'quiz';
   }
@@ -745,10 +755,6 @@ function showSection(sectionName) {
   }
 
   syncQuizLookup(resolved === 'quiz');
-
-  if (elements.mobileMenuToggle) {
-    elements.mobileMenuToggle.hidden = false; // Luôn hiện nút menu
-  }
 }
 
 function setDashboardContainerMode(mode) {
@@ -776,37 +782,36 @@ function setDashboardContainerMode(mode) {
 
 
 function setView(viewKey) {
-  const isAuthed = !elements.userBadge.hidden;
-  const requiresAuth = ['home', 'account', 'history', 'leaderboard', 'classes', 'tenses', 'chinese', 'vocab'].includes(viewKey);
+  const requiresAuth = ['home', 'subject', 'account', 'history', 'leaderboard', 'classes', 'english', 'chinese', 'changelog'].includes(viewKey);
 
   let targetView = viewKey;
-  if (requiresAuth && !isAuthed) {
+  if (requiresAuth && !isAuthed()) {
     targetView = 'auth'; // Chuyển hướng người dùng chưa đăng nhập về màn hình auth
   }
 
   currentView = targetView;
-
-  // Update active state in sidebar
-  document.querySelectorAll('.sidebar-item[data-nav]').forEach(item => {
-    item.classList.toggle('active', item.dataset.nav === targetView);
-  });
-  // Also handle user badge for 'account' view
-  if (elements.userBadge) {
-    elements.userBadge.classList.toggle('active', targetView === 'account');
-  }
+  syncShellChrome();
 
   // reset: hide everything first
-  if (elements.homeView) elements.homeView.hidden = true;
-  if (elements.accountView) elements.accountView.hidden = true;
-  if (elements.historyCard) elements.historyCard.hidden = true;
-  if (elements.leaderboardCard) elements.leaderboardCard.hidden = true;
-  if (elements.classCard) elements.classCard.hidden = true;
-  if (elements.tensesView) elements.tensesView.hidden = true;
-  if (elements.chineseView) elements.chineseView.hidden = true;
-  if (elements.vocabView) elements.vocabView.hidden = true;
-  if (elements.aboutCard) elements.aboutCard.hidden = true;
-  if (elements.appInfoCard) elements.appInfoCard.hidden = true;
-  if (elements.feedbackSection) elements.feedbackSection.hidden = true;
+  [
+    elements.homeView,
+    elements.subjectView,
+    elements.accountView,
+    elements.historyCard,
+    elements.leaderboardCard,
+    elements.classCard,
+    elements.englishTabs,
+    elements.tensesView,
+    elements.chineseView,
+    elements.vocabView,
+    elements.aboutCard,
+    elements.appInfoCard,
+    elements.changelogCard,
+    elements.settingsCard,
+    elements.feedbackSection,
+  ].forEach((el) => {
+    if (el) el.hidden = true;
+  });
 
   if (elements.editNameForm) elements.editNameForm.hidden = true;
 
@@ -822,6 +827,11 @@ function setView(viewKey) {
       syncPausedQuizButtons();
       break;
 
+    case 'subject':
+      setDashboardContainerMode('home');
+      showSection('dashboard');
+      if (elements.subjectView) elements.subjectView.hidden = false;
+      break;
 
     case 'account':
       setDashboardContainerMode('account');
@@ -855,9 +865,10 @@ function setView(viewKey) {
         loadMyClasses();
       }
       break;
-    case 'tenses':
+    case 'english':
       setDashboardContainerMode('default');
       showSection('none');
+      if (elements.englishTabs) elements.englishTabs.hidden = false;
       if (elements.tensesView) elements.tensesView.hidden = false;
       openTenses();
       break;
@@ -866,12 +877,6 @@ function setView(viewKey) {
       showSection('none');
       if (elements.chineseView) elements.chineseView.hidden = false;
       openChinese();
-      break;
-    case 'vocab':
-      setDashboardContainerMode('default');
-      showSection('none');
-      if (elements.vocabView) elements.vocabView.hidden = false;
-      openVocab();
       break;
     case 'author':
       setDashboardContainerMode('default');
@@ -888,12 +893,24 @@ function setView(viewKey) {
       showSection('none');
       if (elements.appInfoCard) elements.appInfoCard.hidden = false;
       break;
+    case 'changelog':
+      setDashboardContainerMode('default');
+      showSection('none');
+      if (elements.changelogCard) elements.changelogCard.hidden = false;
+      break;
+    case 'settings':
+      setDashboardContainerMode('default');
+      showSection('none');
+      if (elements.settingsCard) elements.settingsCard.hidden = false;
+      break;
     case 'auth':
     default:
       setDashboardContainerMode('default');
       showSection('auth');
       break;
   }
+
+  syncNavActiveState();
 }
 
 
@@ -1042,80 +1059,271 @@ if (elements.quizCard) {
   });
 }
 
-function setSidebarCollapsed(collapsed) {
-  if (!elements.sidebar) return;
-  elements.sidebar.classList.toggle('is-collapsed', Boolean(collapsed));
-  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0'); // For app.js's getSidebarCollapsed
-  localStorage.setItem('sidebarCollapsed', collapsed ? 'true' : 'false'); // For ui-final-fix.js
-  // cập nhật biểu tượng mũi tên
-  updateHomeCaret();
-}
-
-function updateHomeCaret() {
-  const caret = document.querySelector('#sidebarToggle .sidebar-caret');
-  const label = document.querySelector('#sidebarToggle .sidebar-label');
-  const toggle = document.getElementById('sidebarToggle');
-  if (!elements.sidebar) return;
-
-  const collapsed = elements.sidebar.classList.contains('is-collapsed');
-
-  // Khi sidebar đang mở: caret hướng vào trong (‹) để gợi ý "thu gọn".
-  // Khi sidebar đang thu gọn: caret hướng ra ngoài (›) để gợi ý "mở rộng".
-  if (caret) caret.textContent = collapsed ? '›' : '‹';
-  if (label) label.textContent = collapsed ? 'Mở rộng menu' : 'Thu gọn menu';
-  if (toggle) toggle.title = collapsed ? 'Mở rộng menu' : 'Thu gọn menu';
-}
-
-function getSidebarCollapsed() {
-  const raw = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-  if (raw === null) return null;
-  return raw === '1';
-}
-
 function isQuizVisible() {
   return !elements.quizSection.hidden;
 }
 
-function scrollToTarget(targetEl) {
-  if (!targetEl) return;
-  targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+// =============================================================================
+// MENU NGANG
+// Cùng một cây DOM dùng cho cả máy tính (thanh ngang, nhánh sổ xuống) và điện
+// thoại (gom vào nút Menu, nhánh dạng accordion). Khác nhau chỉ ở CSS, dựa vào
+// class .is-compact trên #siteHeader do syncNavCompact() đặt.
+// =============================================================================
+
+// Môn hiển thị trên menu: bỏ các môn tạm ẩn, sắp theo MENU_SUBJECT_ORDER.
+function getMenuSubjects() {
+  const rank = (slug) => {
+    const index = MENU_SUBJECT_ORDER.indexOf(slug);
+    return index === -1 ? MENU_SUBJECT_ORDER.length : index;
+  };
+  return availableSubjects
+    .filter((subject) => !MENU_HIDDEN_SUBJECTS.includes(subject.slug))
+    .map((subject, index) => ({ subject, index }))
+    .sort((a, b) => rank(a.subject.slug) - rank(b.subject.slug) || a.index - b.index)
+    .map((row) => row.subject);
 }
 
-function navigateFromSidebar(navKey) {
-  const isAuthed = !elements.userBadge.hidden;
+function buildNavTree() {
+  const subjectChildren = (view) =>
+    getMenuSubjects().map((subject) => ({ label: subject.name, view, slug: subject.slug }));
 
-    if (isQuizVisible() && questions.length) {
-    // Không hiện hộp thoại trình duyệt: tự lưu bài và chuyển trang bình thường
+  return [
+    { id: 'home', label: 'Trang chủ', view: 'home' },
+    { id: 'subjects', label: 'Môn học', children: subjectChildren('subject') },
+    { id: 'leaderboard', label: 'Bảng xếp hạng', children: subjectChildren('leaderboard') },
+    { id: 'classes', label: 'Lớp học', view: 'classes' },
+    {
+      id: 'languages',
+      label: 'Học ngoại ngữ',
+      children: [
+        { label: 'Tiếng Anh', view: 'english' },
+        { label: 'Tiếng Trung', view: 'chinese' },
+      ],
+    },
+    {
+      id: 'info',
+      label: 'Thông tin',
+      children: [
+        { label: 'Tác giả', view: 'author' },
+        { label: 'Góp ý', view: 'feedback' },
+        { label: 'Giới thiệu ứng dụng', view: 'aboutApp' },
+        { label: 'Thông tin nâng cấp', view: 'changelog' },
+      ],
+    },
+    {
+      id: 'account',
+      label: 'Tài khoản',
+      children: [
+        { label: 'Thông tin', view: 'account' },
+        { label: 'Lịch sử ôn tập', view: 'history' },
+        { label: 'Đăng xuất', action: 'logout' },
+      ],
+    },
+    { id: 'settings', label: 'Tùy chỉnh', view: 'settings' },
+  ];
+}
+
+let renderedNavHtml = '';
+
+function renderMainNav() {
+  if (!elements.navList) return;
+
+  const itemAttrs = (item) => {
+    if (item.action) return `data-nav-action="${escapeHtml(item.action)}"`;
+    const slug = item.slug ? ` data-nav-slug="${escapeHtml(item.slug)}"` : '';
+    return `data-nav-view="${escapeHtml(item.view)}"${slug}`;
+  };
+
+  const html = buildNavTree()
+    .map((node) => {
+      if (!node.children) {
+        return `
+          <li class="nav-item">
+            <button class="nav-link" type="button" ${itemAttrs(node)}>${escapeHtml(node.label)}</button>
+          </li>`;
+      }
+      const subId = `navSub-${node.id}`;
+      const children = node.children.length
+        ? node.children
+            .map((child) => `
+              <li><button class="nav-sub-link" type="button" ${itemAttrs(child)}>${escapeHtml(child.label)}</button></li>`)
+            .join('')
+        : '<li class="nav-sub-empty">Đang tải...</li>';
+      return `
+        <li class="nav-item has-sub">
+          <button class="nav-link" type="button" data-nav-branch="${escapeHtml(node.id)}" aria-expanded="false" aria-controls="${subId}">
+            <span>${escapeHtml(node.label)}</span><span class="nav-caret" aria-hidden="true"></span>
+          </button>
+          <ul id="${subId}" class="nav-sub" hidden>${children}</ul>
+        </li>`;
+    })
+    .join('');
+
+  // Mỗi lần về Trang chủ app tải lại danh sách môn. Danh sách không đổi thì không vẽ lại,
+  // nếu không người dùng bàn phím sẽ mất vị trí focus đang đứng trên menu.
+  if (html !== renderedNavHtml) {
+    // Danh sách môn đổi trong lúc nhánh đang mở thì vẫn giữ nhánh đó mở.
+    const openBranch = getOpenNavBranch();
+    elements.navList.innerHTML = html;
+    renderedNavHtml = html;
+    if (openBranch) setOpenNavBranch(openBranch);
+  }
+
+  syncNavActiveState();
+  syncNavCompact();
+}
+
+function getNavBranchButton(branchId) {
+  return elements.navList?.querySelector(`[data-nav-branch="${branchId}"]`) || null;
+}
+
+function getOpenNavBranch() {
+  return elements.navList?.querySelector('[data-nav-branch][aria-expanded="true"]')?.dataset.navBranch || null;
+}
+
+// Mỗi lần chỉ mở một nhánh. Truyền null để đóng hết.
+function setOpenNavBranch(branchId) {
+  if (!elements.navList) return;
+  elements.navList.querySelectorAll('[data-nav-branch]').forEach((button) => {
+    const isOpen = button.dataset.navBranch === branchId;
+    button.setAttribute('aria-expanded', String(isOpen));
+    const panel = document.getElementById(button.getAttribute('aria-controls'));
+    if (panel) panel.hidden = !isOpen;
+  });
+}
+
+function setCompactNavOpen(open) {
+  if (!elements.siteHeader || !elements.navToggle) return;
+  elements.siteHeader.classList.toggle('is-open', Boolean(open));
+  elements.navToggle.setAttribute('aria-expanded', String(Boolean(open)));
+}
+
+function closeNavMenus() {
+  setOpenNavBranch(null);
+  setCompactNavOpen(false);
+}
+
+// Tô sáng mục cha của trang đang xem và mục con đúng môn đang xem.
+function syncNavActiveState() {
+  if (!elements.navList) return;
+  const activeSlug =
+    currentView === 'subject' ? confirmedSubjectSlug
+    : currentView === 'leaderboard' ? leaderboardSubjectSlug
+    : null;
+
+  elements.navList.querySelectorAll('.nav-item').forEach((item) => {
+    let parentActive = false;
+    item.querySelectorAll('[data-nav-view]').forEach((button) => {
+      const sameView = button.dataset.navView === currentView;
+      const isCurrent = sameView && (button.dataset.navSlug || null) === activeSlug;
+      // Mỗi view chỉ thuộc một nhánh, nên trùng view là tô sáng mục cha, kể cả khi
+      // đang mở môn tạm ẩn (môn đó không có mục con trên menu).
+      if (sameView) parentActive = true;
+      button.classList.toggle('is-current', isCurrent);
+      if (isCurrent) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    item.classList.toggle('is-active', parentActive);
+  });
+}
+
+// Chuyển sang nút Menu khi 8 mục không còn vừa một hàng. Đo thật thay vì dùng một
+// mốc px cố định, vì độ rộng menu đổi theo cỡ chữ và font trong mục Tùy chỉnh.
+function syncNavCompact() {
+  const header = elements.siteHeader;
+  if (!header || header.hidden) return;
+  const inner = header.querySelector('.site-header-inner');
+  if (!inner) return;
+  header.classList.remove('is-compact');
+  const overflows = inner.scrollWidth > inner.clientWidth + 1;
+  const compact = overflows || window.innerWidth <= 768;
+  header.classList.toggle('is-compact', compact);
+  if (!compact) setCompactNavOpen(false);
+}
+
+// Hiện menu khi đã đăng nhập, trừ màn đăng nhập (kể cả lúc đang đặt lại mật khẩu).
+function syncShellChrome() {
+  const showMenu = isAuthed() && currentView !== 'auth';
+  if (elements.siteHeader) elements.siteHeader.hidden = !showMenu;
+  if (elements.brandPlain) elements.brandPlain.hidden = showMenu;
+  if (showMenu) syncNavCompact();
+  else closeNavMenus();
+}
+
+function setupMainNav() {
+  renderMainNav();
+
+  elements.navList?.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+
+    const branchId = button.dataset.navBranch;
+    if (branchId) {
+      setOpenNavBranch(getOpenNavBranch() === branchId ? null : branchId);
+      return;
+    }
+
+    closeNavMenus();
+    if (button.dataset.navAction === 'logout') {
+      handleLogout();
+      return;
+    }
+    if (button.dataset.navView) {
+      navigateTo(button.dataset.navView, { slug: button.dataset.navSlug });
+    }
+  });
+
+  elements.navToggle?.addEventListener('click', () => {
+    const willOpen = !elements.siteHeader.classList.contains('is-open');
+    setCompactNavOpen(willOpen);
+    if (!willOpen) setOpenNavBranch(null);
+  });
+
+  elements.siteBrand?.addEventListener('click', (event) => {
+    // Giữ nguyên Ctrl/Cmd + bấm để mở tab mới.
+    if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+    event.preventDefault();
+    closeNavMenus();
+    navigateTo('home');
+  });
+
+  // Nhấn ra ngoài các mục menu thì đóng.
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.nav-item') || event.target.closest('#navToggle')) return;
+    closeNavMenus();
+  });
+
+  // Esc: đóng nhánh đang mở trước, nhấn tiếp thì đóng cả khung menu điện thoại.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const openBranch = getOpenNavBranch();
+    if (openBranch) {
+      setOpenNavBranch(null);
+      getNavBranchButton(openBranch)?.focus();
+    } else if (elements.siteHeader?.classList.contains('is-open')) {
+      setCompactNavOpen(false);
+      elements.navToggle?.focus();
+    }
+  });
+
+  // Tab ra khỏi menu thì đóng. relatedTarget rỗng (ví dụ Safari không đưa focus vào
+  // nút khi bấm chuột) thì bỏ qua để không đóng nhánh trước khi click kịp tới mục con.
+  elements.siteHeader?.addEventListener('focusout', (event) => {
+    if (event.relatedTarget && !elements.siteHeader.contains(event.relatedTarget)) closeNavMenus();
+  });
+
+  window.addEventListener('resize', syncNavCompact);
+  document.fonts?.ready?.then(syncNavCompact);
+}
+
+// Điều hướng từ menu: đang làm bài thì tự lưu rồi mới chuyển trang, không hỏi lại.
+function navigateTo(navKey, params = {}) {
+  if (isQuizVisible() && questions.length) {
     pauseQuiz();
   }
 
-
   setView(navKey);
-
-  // scroll after view is visible
-  if (navKey === 'home') {
-    scrollToTarget(isAuthed ? elements.dashboardSection : elements.authSection);
-  } else if (navKey === 'account') {
-    scrollToTarget(isAuthed ? elements.accountView : elements.authSection);
-  } else if (navKey === 'history') {
-    scrollToTarget(isAuthed ? elements.historyCard : elements.authSection);
-  } else if (navKey === 'leaderboard') {
-    scrollToTarget(isAuthed ? elements.leaderboardCard : elements.authSection);
-  } else if (navKey === 'classes') {
-    scrollToTarget(isAuthed ? elements.classCard : elements.authSection);
-  } else if (navKey === 'tenses') {
-    scrollToTarget(isAuthed ? elements.tensesView : elements.authSection);
-  } else if (navKey === 'chinese') {
-    scrollToTarget(isAuthed ? elements.chineseView : elements.authSection);
-  } else if (navKey === 'vocab') {
-    scrollToTarget(isAuthed ? elements.vocabView : elements.authSection);
-  } else if (navKey === 'author') {
-    scrollToTarget(elements.aboutCard);
-  } else if (navKey === 'feedback') {
-    scrollToTarget(elements.feedbackSection);
-  } else if (navKey === 'aboutApp') {
-    scrollToTarget(elements.appInfoCard);
-  }
+  window.scrollTo({ top: 0 });
 }
 
 
@@ -1160,24 +1368,16 @@ function setAuthMode(mode) {
 function updateUserUI(session) {
   const user = session?.user;
   currentUserId = user?.id || null;
+  currentUserDisplayName = user ? 'Đang tải...' : '';
 
-  if (user) {
-    elements.userBadge.hidden = false;
-    if (elements.mobileUserBadge) elements.mobileUserBadge.hidden = false;
-    elements.userEmail.textContent = 'Đang tải...';
-    if (elements.mobileUserEmail) elements.mobileUserEmail.textContent = 'Đang tải...';
-    elements.logoutBtn.hidden = false;
-    if (elements.mobileLogoutBtn) elements.mobileLogoutBtn.hidden = false;
-
-    document.querySelectorAll('.sidebar-item[data-nav="auth"]').forEach(btn => btn.hidden = true);
-  } else {
-    elements.userBadge.hidden = true;
-    if (elements.mobileUserBadge) elements.mobileUserBadge.hidden = true;
-    elements.logoutBtn.hidden = true;
-    if (elements.mobileLogoutBtn) elements.mobileLogoutBtn.hidden = true;
-
-    document.querySelectorAll('.sidebar-item[data-nav="auth"]').forEach(btn => btn.hidden = false);
+  if (!user) {
+    // Không để tài khoản đăng nhập sau thừa hưởng môn đang chọn của tài khoản trước.
+    selectedSubjectSlug = null;
+    confirmedSubjectSlug = null;
+    leaderboardSubjectSlug = null;
   }
+
+  syncShellChrome();
 }
 
 
@@ -1198,9 +1398,7 @@ async function ensureProfileForSession(session) {
     const existingName = (existing?.full_name || '').trim();
     const displayName = existingName || user.email || 'Người dùng';
 
-    elements.userEmail.textContent = displayName;
-    // New: Update mobile user email
-    if (elements.mobileUserEmail) elements.mobileUserEmail.textContent = displayName;
+    currentUserDisplayName = displayName;
     if (elements.accountName) elements.accountName.textContent = displayName;
     if (elements.accountEmail) elements.accountEmail.textContent = user.email || '';
 
@@ -1210,10 +1408,8 @@ async function ensureProfileForSession(session) {
   } catch (error) {
     console.warn('Không thể tải profiles:', error);
     const fallback = session?.user?.email || 'Người dùng';
-    elements.userEmail.textContent = fallback;
+    currentUserDisplayName = fallback;
     if (elements.accountName) elements.accountName.textContent = fallback;
-    // New: Update mobile user email
-    if (elements.mobileUserEmail) elements.mobileUserEmail.textContent = fallback;
     if (elements.accountEmail) elements.accountEmail.textContent = session?.user?.email || '';
     if (elements.newNameInput) elements.newNameInput.value = '';
   }
@@ -1296,147 +1492,6 @@ async function loadLessons() {
   } finally {
     lessonsLoading = false;
   }
-}
-
-function ensureMobileMenuUI() {
-  const frame = document.querySelector('.app-frame');
-  const content = document.querySelector('.app-content');
-  if (!frame || !content) return;
-
-  
-
-  // Create once
-  if (elements.mobileMenu) { // Check elements.mobileMenu instead of document.getElementById
-    elements.mobileMenu = document.getElementById('mobileMenu');
-    elements.mobileMenuToggle = document.getElementById('mobileMenuToggle');
-    elements.mobileMenuPanel = document.getElementById('mobileMenuPanel');
-    return;
-  }
-
-  const wrap = document.createElement('div');
-  wrap.id = 'mobileMenu';
-  wrap.className = 'mobile-menu';
-
-  const toggle = document.createElement('button');
-  toggle.id = 'mobileMenuToggle';
-  toggle.className = 'mobile-menu-toggle sidebar-item';
-  toggle.type = 'button'; // New: Ensure button type
-  toggle.innerHTML = '<span class="sidebar-icon">☰</span><span class="sidebar-label">Menu</span><span class="sidebar-caret" aria-hidden="true">▼</span>';
-
-  const panel = document.createElement('div');
-  panel.id = 'mobileMenuPanel';
-  panel.className = 'mobile-menu-panel';
-
- const items = Array.from(document.querySelectorAll('.sidebar-item[data-nav]'))
-  .filter((btn) => {
-    const nav = btn.dataset.nav || '';
-    const label = btn.querySelector('.sidebar-label')?.textContent?.trim() || '';
-
-    return (
-      nav &&
-      nav !== 'account' &&
-      nav !== 'auth' &&
-      btn.id !== 'sidebarToggle' &&
-      btn.id !== 'mobileMenuToggle' &&
-      !btn.classList.contains('sidebar-toggle') &&
-      !label.includes('Mở rộng menu') &&
-      !label.includes('Thu gọn menu')
-    );
-  });
-
-  items.forEach((src) => {
-    const btn = document.createElement('button');
-    btn.className = 'sidebar-item';
-    btn.type = 'button';
-    btn.dataset.nav = src.dataset.nav || '';
-    btn.title = src.title || '';
-
-    // Dùng innerHTML (không phải textContent) để giữ được icon dạng SVG
-    // như "Lớp học", "12 thì tiếng Anh". Nội dung lấy từ markup tĩnh của sidebar.
-    const icon = src.querySelector('.sidebar-icon')?.innerHTML || '';
-    const label = src.querySelector('.sidebar-label')?.textContent || '';
-    btn.innerHTML = `<span class="sidebar-icon">${icon}</span><span class="sidebar-label">${label}</span>`;
-
-    btn.addEventListener('click', () => {
-      navigateFromSidebar(btn.dataset.nav);
-      // close after navigate
-      wrap.classList.remove('open');
-      const caret = toggle.querySelector('.sidebar-caret');
-      if (caret) caret.textContent = '▼';
-    });
-
-    panel.appendChild(btn);
-  });
-
-  // Add separator and footer items
-  const footerContainer = document.createElement('div');
-  footerContainer.className = 'sidebar-footer'; // Use same class for potential styling
-  footerContainer.style.marginTop = '10px';
-  footerContainer.style.paddingTop = '10px';
-  footerContainer.style.borderTop = '1px solid var(--line)';
-
-  // User badge for mobile
-  const userBadgeMobile = document.createElement('button');
-  userBadgeMobile.className = 'sidebar-item';
-  userBadgeMobile.type = 'button';
-  userBadgeMobile.title = 'Tài khoản';
-  userBadgeMobile.innerHTML = `<span class="sidebar-icon">👤</span><span class="sidebar-label" id="mobileUserEmail"></span>`;
-  userBadgeMobile.hidden = true;
-  userBadgeMobile.addEventListener('click', () => {
-    navigateFromSidebar('account');
-    wrap.classList.remove('open'); // Close menu on nav
-    const caret = toggle.querySelector('.sidebar-caret');
-    if (caret) caret.textContent = '▼';
-  });
-
-  // Logout button for mobile
-  const logoutBtnMobile = document.createElement('button');
-  logoutBtnMobile.className = 'sidebar-item';
-  logoutBtnMobile.type = 'button';
-  logoutBtnMobile.title = 'Đăng xuất';
-  logoutBtnMobile.innerHTML = `<span class="sidebar-icon">⎋</span><span class="sidebar-label">Đăng xuất</span>`;
-  logoutBtnMobile.hidden = true;
-  logoutBtnMobile.addEventListener('click', handleLogout);
-
-  footerContainer.appendChild(userBadgeMobile);
-  footerContainer.appendChild(logoutBtnMobile);
-  panel.appendChild(footerContainer);
-  // Xóa nút thu gọn/mở rộng sidebar desktop nếu bị copy nhầm vào mobile menu
-Array.from(panel.querySelectorAll('.sidebar-item')).forEach((btn) => {
-  const label = btn.querySelector('.sidebar-label')?.textContent?.trim() || '';
-
-  if (
-    btn.id === 'sidebarToggle' ||
-    btn.classList.contains('sidebar-toggle') ||
-    label.includes('Mở rộng menu') ||
-    label.includes('Thu gọn menu')
-  ) {
-    btn.remove();
-  }
-});
-
-  toggle.addEventListener('click', () => {
-    wrap.classList.toggle('open');
-    const caret = toggle.querySelector('.sidebar-caret');
-    if (caret) caret.textContent = wrap.classList.contains('open') ? '▲' : '▼';
-  });
-
-  wrap.appendChild(toggle);
-  wrap.appendChild(panel); // Panel is inside the wrap
-const appShell = document.querySelector('.app-shell');
-const appFrame = document.querySelector('.app-frame');
-
-if (appShell && appFrame) {
-  appShell.insertBefore(wrap, appFrame);
-} else if (appShell) {
-  appShell.prepend(wrap);
-}
-  elements.mobileMenu = wrap;
-  elements.mobileMenuToggle = toggle;
-  elements.mobileMenuPanel = panel;
-  elements.mobileUserBadge = userBadgeMobile;
-  elements.mobileUserEmail = userBadgeMobile.querySelector('#mobileUserEmail');
-  elements.mobileLogoutBtn = logoutBtnMobile;
 }
 
 function setupHomeViewLayout() {
@@ -1593,6 +1648,7 @@ async function loadSubjects() {
         availableSubjects = toUpperSubjects(FALLBACK_SUBJECTS);
         renderSubjectCards();
         updateHomeCardsVisibility();
+        renderMainNav();
         return;
     }
     try {
@@ -1610,6 +1666,7 @@ async function loadSubjects() {
     availableSubjects = toUpperSubjects(availableSubjects);
     renderSubjectCards();
     updateHomeCardsVisibility();
+    renderMainNav();
 }
 
 // New: Render subject cards
@@ -1709,9 +1766,7 @@ function updateHomeCardsVisibility() {
     const newName = (data?.full_name || '').trim();
     // Cập nhật UI ngay, không cần reload
     if (elements.accountName) elements.accountName.textContent = newName || user.email || '';
-    elements.userEmail.textContent = newName || user.email || '';
-    // New: Update mobile user email
-    if (elements.mobileUserEmail) elements.mobileUserEmail.textContent = newName || user.email || '';
+    currentUserDisplayName = newName || user.email || '';
 
     if (elements.editNameForm) elements.editNameForm.hidden = true;
     if (elements.editNameBtn) elements.editNameBtn.textContent = 'Đổi tên';
@@ -1766,8 +1821,8 @@ function sendFeedbackEmail() {
   const to = 'tp058235@gmail.com';
   const subject = 'Góp ý về ứng dụng Quiz App';
 
-  const userLine = !elements.userBadge.hidden
-    ? `Tài khoản: ${elements.userEmail.textContent || ''}`
+  const userLine = isAuthed()
+    ? `Tài khoản: ${currentUserDisplayName}`
     : 'Tài khoản: (chưa đăng nhập)';
 
   const body = `${userLine}\n\nNội dung góp ý:\n${content}`;
@@ -1946,13 +2001,15 @@ async function handleLogout() {
   }
 
   try {
+    // Đang làm bài thì lưu lại trước, đăng nhập lại vẫn tiếp tục được.
+    if (isQuizVisible() && questions.length) pauseQuiz();
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
         updateUserUI(null);
         clearQuizState();
         setView('auth');
         showSection('auth');
-        if (elements.sidebar) elements.sidebar.hidden = true;
         setStatus('Đã đăng xuất.', 'success');
 
 
@@ -3945,48 +4002,7 @@ function wireClassEvents() {
 }
 
 function wireEvents() {
-  // Xóa nút "Tài khoản" khỏi menu chính (chỉ dùng ô user ở cuối sidebar để vào trang Tài khoản)
-  const accountNavBtn = document.querySelector('.sidebar-item[data-nav="account"]');
-  // New: If mobile menu toggle is in header, remove it from sidebar
-  if (elements.mobileMenuToggle && elements.mobileMenuToggle.parentNode === elements.sidebar) {
-    elements.mobileMenuToggle.remove();
-  }
-
-  if (accountNavBtn) accountNavBtn.remove();
-
-  // toggle button to collapse/expand sidebar
-  if (elements.sidebarToggle) {
-    elements.sidebarToggle.addEventListener('click', () => {
-      if (!elements.sidebar) return;
-      const collapsed = elements.sidebar.classList.contains('is-collapsed');
-      setSidebarCollapsed(!collapsed);
-    });
-  }
-
-
-    if (elements.sidebarItems?.length) {
-    elements.sidebarItems.forEach((item) => {
-      item.addEventListener('click', (e) => {
-        const nav = item.dataset.nav;
-        if (!nav) return;
-        navigateFromSidebar(nav);
-      });
-    });
-  }
-
-  // Ô tên người dùng (cuối sidebar) -> mở trang Tài khoản
-  if (elements.userBadge) {
-    elements.userBadge.addEventListener('click', () => navigateFromSidebar('account'));
-    elements.userBadge.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        navigateFromSidebar('account');
-      }
-    });
-    elements.userBadge.tabIndex = 0;
-    elements.userBadge.setAttribute('role', 'button');
-  }
-
+  setupMainNav();
 
   elements.modeChips.forEach((chip) => {
     chip.addEventListener('click', () => setAuthMode(chip.dataset.authMode));
@@ -4076,7 +4092,6 @@ function wireEvents() {
     elements.sendFeedbackBtn.addEventListener('click', sendFeedbackEmail);
   }
 
-  elements.logoutBtn.addEventListener('click', handleLogout);
   elements.refreshHistoryBtn.addEventListener('click', loadHistory);
   if (elements.refreshLeaderboardBtn) {
     elements.refreshLeaderboardBtn.addEventListener('click', loadLeaderboard);
@@ -4210,11 +4225,10 @@ function handleAutoSaveAndPause() {
 function handleReturnToApp() {
   const away = hiddenAt ? Date.now() - hiddenAt : 0;
   hiddenAt = 0;
-  const isAuthed = elements.userBadge && !elements.userBadge.hidden;
   const hadQuiz = Boolean(isQuizVisible() && questions.length);
-  if (away >= AWAY_EXIT_MS && isAuthed && (hadQuiz || (currentView !== 'home' && currentView !== 'auth'))) {
+  if (away >= AWAY_EXIT_MS && isAuthed() && (hadQuiz || (currentView !== 'home' && currentView !== 'auth'))) {
     pausedByHide = false;
-    navigateFromSidebar('home');
+    navigateTo('home');
     const mins = Math.round(AWAY_EXIT_MS / 60000);
     showAppNotice(
       hadQuiz
@@ -4288,19 +4302,11 @@ function openPasswordRecovery(session) {
     setStatus(configError, 'error');
   }
 
-  // Luôn xác định trạng thái thanh bên theo kích thước cửa sổ hiện tại khi tải, không phải giá trị đã lưu.
-  // Điều này ngăn trạng thái "thu gọn" từ phiên di động làm hỏng bố cục trên máy tính để bàn.
-  // Người dùng vẫn có thể chuyển đổi thanh bên theo cách thủ công trong phiên.
-  setSidebarCollapsed(window.matchMedia('(max-width: 768px)').matches);
-
     // mặc định: Trang chủ bị ẩn, chỉ hiện sau khi bấm menu hoặc sau khi đăng nhập
   setView('auth');
 
     // Tách layout Luyện tập / Thi thử (chỉ DOM client-side, không đổi HTML gốc)
   setupHomeViewLayout();
-
-    // Mobile menu on small screens
-    ensureMobileMenuUI();
 
     ensureForgotPasswordUI();
     ensureAccountPasswordUI();
@@ -4316,7 +4322,6 @@ function openPasswordRecovery(session) {
 
   setAuthMode('login');
   showCaptcha('authCaptcha');
-updateHomeCaret();
 
 if (!configError) {
   supabase.auth.onAuthStateChange((event, session) => {
@@ -4373,7 +4378,7 @@ try {
   if (joinCode && currentUserId) {
     classState.joinCodePrefill = joinCode.toUpperCase();
     classState.screen = 'join';
-    navigateFromSidebar('classes');
+    navigateTo('classes');
     window.history.replaceState({}, '', window.location.pathname);
   }
 } catch {

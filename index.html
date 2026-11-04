@@ -35,6 +35,7 @@
     />
     <link rel="stylesheet" href="./style.css" />
     <link rel="stylesheet" href="./style-final-fix.css?v=20261005-1" />
+    <link rel="stylesheet" href="./menu.css?v=20261104-1" />
     <style>
       /* Đảm bảo thuộc tính hidden luôn có tác dụng và không bị ghi đè bởi CSS khác */
       html body [hidden] {
@@ -233,107 +234,30 @@
     </style>
   </head>
     <body>
+      <!-- Menu ngang: chỉ hiện khi đã đăng nhập. Các mục do renderMainNav() trong app.js dựng
+           (danh sách môn lấy từ get_subjects nên thêm môn mới trên Supabase là menu tự cập nhật). -->
+      <header id="siteHeader" class="site-header" hidden>
+        <div class="site-header-inner">
+          <a id="siteBrand" class="site-brand" href="./" aria-label="Quiz App, về Trang chủ">
+            <img src="./public/favicon.png" alt="" class="site-brand-logo" />
+            <img src="./public/2.png" alt="" class="site-brand-name" />
+          </a>
+          <button id="navToggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="mainNav">
+            <span class="nav-toggle-bars" aria-hidden="true"></span>
+            <span>Menu</span>
+          </button>
+          <nav id="mainNav" class="main-nav" aria-label="Điều hướng chính">
+            <ul id="navList" class="nav-list"></ul>
+          </nav>
+        </div>
+      </header>
+
       <div class="app-shell">
-         <header class="app-brand-plain" aria-label="Quiz App">
+         <header id="brandPlain" class="app-brand-plain" aria-label="Quiz App">
       <img src="./public/favicon.png" alt="" class="app-brand-logo" />
       <img src="./public/2.png" alt="Quiz App" class="app-brand-name" />
     </header>
         <div class="app-frame">
-          <div class="sidebar-column">
-                <aside id="sidebar" class="sidebar" aria-label="Thanh tác vụ" hidden>
-                  
-          <button id="sidebarToggle" class="sidebar-item sidebar-toggle" type="button" title="Thu gọn/Mở rộng menu">
-            <span class="sidebar-icon">☰</span>
-            <span class="sidebar-label">Thu gọn menu</span>
-            <span class="sidebar-caret" aria-hidden="true">‹</span>
-          </button>
-          <nav class="sidebar-nav" aria-label="Điều hướng">
-                        <button class="sidebar-item" type="button" data-nav="home" title="Trang chủ">
-              <span class="sidebar-icon">⌂</span>
-              <span class="sidebar-label">Trang chủ</span>
-            </button>
-
-
-            <button class="sidebar-item" type="button" data-nav="account" title="Tài khoản">
-              <span class="sidebar-icon">⚙</span>
-              <span class="sidebar-label">Tài khoản</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="history" title="Lịch sử ôn tập">
-              <span class="sidebar-icon">⏱</span>
-              <span class="sidebar-label">Lịch sử ôn tập</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="leaderboard" title="Bảng xếp hạng">
-              <span class="sidebar-icon">★</span>
-              <span class="sidebar-label">Bảng xếp hạng</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="classes" title="Lớp học">
-              <span class="sidebar-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                  <path d="M12 4.5 20 9 12 13.5 4 9 12 4.5Z" />
-                  <path d="M7.5 10.6V14.6C7.5 16 9.6 17.1 12 17.1s4.5-1.1 4.5-2.5v-4" />
-                  <path d="M20 9v4.4" />
-                </svg>
-              </span>
-              <span class="sidebar-label">Lớp học</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="tenses" title="12 thì tiếng Anh">
-              <span class="sidebar-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                  <circle cx="12" cy="12" r="8.5" />
-                  <path d="M12 7.5V12l3 2" />
-                </svg>
-              </span>
-              <span class="sidebar-label">12 thì tiếng Anh</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="chinese" title="Tiếng Trung YCT">
-              <span class="sidebar-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                  <rect x="7.5" y="3.5" width="12" height="15" rx="2" />
-                  <path d="M4.5 7v11.5a2 2 0 0 0 2 2h9" />
-                  <path d="M10.5 8h6M13.5 6.5v8M11 14.5l2.5-3 2.5 3" />
-                </svg>
-              </span>
-              <span class="sidebar-label">Tiếng Trung YCT</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="vocab" title="Từ vựng tiếng Anh">
-              <span class="sidebar-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                  <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H18v13H5.5A1.5 1.5 0 0 0 4 18.5v-13Z" />
-                  <path d="M4 18.5A1.5 1.5 0 0 0 5.5 20H18v-3" />
-                  <path d="m8 13 2.5-6 2.5 6M8.8 11h3.4" />
-                </svg>
-              </span>
-              <span class="sidebar-label">Từ vựng tiếng Anh</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="author" title="Tác giả">
-              <span class="sidebar-icon">✎</span>
-              <span class="sidebar-label">Tác giả</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="feedback" title="Góp ý">
-              <span class="sidebar-icon">✉</span>
-              <span class="sidebar-label">Góp ý</span>
-            </button>
-            <button class="sidebar-item" type="button" data-nav="aboutApp" title="Giới thiệu ứng dụng">
-              <span class="sidebar-icon">ⓘ</span>
-              <span class="sidebar-label">Giới thiệu ứng dụng</span>
-            </button>
-            <button id="loginNavBtn" class="sidebar-item" type="button" data-nav="auth" title="Đăng nhập">
-              <span class="sidebar-icon">🔑</span>
-              <span class="sidebar-label">Đăng nhập</span>
-            </button>
-            <div id="userBadge" class="sidebar-item" hidden title="Tài khoản">
-              <span class="sidebar-icon">👤</span>
-              <span class="sidebar-label"><span id="userEmail">user@example.com</span></span>
-            </div>
-            <button id="logoutBtn" class="sidebar-item" type="button" title="Đăng xuất" hidden>
-              <span class="sidebar-icon">⎋</span>
-              <span class="sidebar-label">Đăng xuất</span>
-            </button>
-          </nav>
-
-
-        </aside>
-  </div>
                 <div class="app-content">
              
       <main class="main-grid">
@@ -436,6 +360,9 @@
 
                 <section id="dashboardSection" class="panel" hidden>
           <div id="homeView"></div>
+
+          <!-- Màn môn học: nội dung (chọn bài, luyện tập, thi thử) do setupHomeViewLayout() dựng -->
+          <div id="subjectView" hidden></div>
 
                     <div id="accountView" class="hero-card" hidden>
             <p class="eyebrow">Tài khoản</p>
@@ -702,6 +629,13 @@
                   </div>
                 </section>
               </div>
+
+        <!-- Thông tin nâng cấp và Tùy chỉnh -->
+        <section id="changelogCard" class="panel about-card" hidden></section>
+        <section id="settingsCard" class="panel about-card" hidden></section>
+
+        <!-- Trang "Tiếng Anh": thanh tab cấp 1 nằm trên 2 mục 12 thì / Từ vựng -->
+        <div id="englishTabs" class="english-tabs" role="tablist" aria-label="Học tiếng Anh" hidden></div>
 
         <!-- Mục "12 thì tiếng Anh": nội dung do tenses/tenses.js dựng (nạp khi mở lần đầu) -->
         <div id="tensesView" class="tenses-view" hidden>

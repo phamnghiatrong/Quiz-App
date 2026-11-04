@@ -1,0 +1,385 @@
+/* menu.css - Menu ngang trên cùng (thay cho sidebar cũ).
+   Nạp SAU style-final-fix.css. File đó có các luật chung dùng !important cho mọi
+   button (min-height, padding, nền trắng, chữ xám, hiệu ứng hover...), nên các
+   khai báo !important dưới đây chỉ để thắng những luật đó. Selector dùng #mainNav
+   để đủ độ ưu tiên, không cần viết selector dài. */
+
+:root {
+  --site-header-h: 4.25rem;
+  /* Thanh menu luôn nền tối, tông tím của app, ở cả giao diện sáng lẫn tối. */
+  --nav-bg: #1b1433;
+  --nav-panel: #251b45;
+  --nav-ink: #f1edff;
+  --nav-ink-soft: #c9c0ea;
+  --nav-accent: #b79cff;
+  --nav-hover: rgba(183, 156, 255, 0.16);
+  --nav-current: rgba(183, 156, 255, 0.24);
+  --nav-line: rgba(183, 156, 255, 0.22);
+}
+
+/* overflow-x: hidden trên html/body làm position: sticky không bám. clip thì không. */
+html,
+body {
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+/* Luật "body .app-shell > header.app-brand-plain" dùng display: flex !important nên
+   thuộc tính hidden không có tác dụng nếu không có luật này. */
+body .app-shell > header.app-brand-plain[hidden] {
+  display: none !important;
+}
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--nav-line);
+  box-shadow: 0 6px 20px rgba(15, 10, 40, 0.28);
+}
+
+.site-header-inner {
+  box-sizing: border-box;
+  width: min(1440px, 100%);
+  min-height: var(--site-header-h);
+  margin: 0 auto;
+  padding: 0.25rem clamp(14px, 2.5vw, 28px);
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Không có sidebar nữa: trang chiếm đủ màn hình trừ phần header. */
+.site-header:not([hidden]) ~ .app-shell {
+  min-height: calc(100vh - var(--site-header-h));
+}
+
+.site-brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  border-radius: 10px;
+}
+
+.site-brand-logo {
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: contain;
+}
+
+.site-brand-name {
+  display: block;
+  width: auto;
+  height: 3.25rem;
+  object-fit: contain;
+}
+
+.main-nav {
+  flex: none;
+  margin-left: auto;
+}
+
+.nav-list,
+.nav-sub {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-list {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.nav-item {
+  position: relative;
+}
+
+/* Mục cấp 1 */
+#mainNav .nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.5rem !important;
+  padding: 0.5rem 0.7rem !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: var(--nav-ink) !important;
+  font-size: 0.9375rem;
+  font-weight: 600 !important;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* style-final-fix.css đặt span { font-weight: 400 }, mục có nhánh sẽ mảnh hơn mục thường */
+#mainNav .nav-link > span {
+  font-weight: inherit;
+}
+
+#mainNav .nav-link:hover,
+#mainNav .nav-link[aria-expanded="true"] {
+  background: var(--nav-hover) !important;
+}
+
+/* Dấu nhấn của mục đang xem: chấm nhỏ dưới chữ */
+#mainNav .nav-item.is-active > .nav-link {
+  color: var(--nav-accent) !important;
+}
+
+#mainNav .nav-item.is-active > .nav-link::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0.2rem;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: var(--nav-accent);
+  transform: translateX(-50%);
+}
+
+.nav-caret {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-top: -0.2rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.nav-link[aria-expanded="true"] .nav-caret {
+  margin-top: 0.15rem;
+  transform: rotate(225deg);
+}
+
+/* Nhánh sổ xuống */
+.nav-sub {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 110;
+  min-width: 13.5rem;
+  max-height: calc(100vh - var(--site-header-h) - 1rem);
+  overflow-y: auto;
+  padding: 0.35rem;
+  display: grid;
+  gap: 0.125rem;
+  background: var(--nav-panel);
+  border: 1px solid var(--nav-line);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgba(15, 10, 40, 0.42);
+}
+
+/* 3 mục cuối nằm sát mép phải: canh nhánh về bên phải để không tràn màn hình */
+.nav-list > .nav-item:nth-last-child(-n + 3) > .nav-sub {
+  left: auto;
+  right: 0;
+}
+
+#mainNav .nav-sub-link {
+  width: 100%;
+  display: block;
+  min-height: 2.5rem !important;
+  padding: 0.5rem 0.75rem !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: var(--nav-ink) !important;
+  font-size: 0.9375rem;
+  font-weight: 600 !important;
+  line-height: 1.3;
+  text-align: left;
+  white-space: nowrap;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#mainNav .nav-sub-link:hover {
+  background: var(--nav-hover) !important;
+}
+
+#mainNav .nav-sub-link.is-current {
+  background: var(--nav-current) !important;
+  color: var(--nav-accent) !important;
+}
+
+.nav-sub-empty {
+  padding: 0.5rem 0.75rem;
+  color: var(--nav-ink-soft);
+  font-size: 0.875rem;
+}
+
+#mainNav button:focus-visible,
+#navToggle:focus-visible,
+.site-brand:focus-visible {
+  outline: 2px solid var(--nav-accent) !important;
+  outline-offset: 2px;
+}
+
+/* Nút Menu (chỉ hiện khi .is-compact) */
+#navToggle {
+  display: none;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: auto;
+  min-height: 2.75rem !important;
+  padding: 0.5rem 0.85rem !important;
+  border: 1px solid var(--nav-line) !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: var(--nav-ink) !important;
+  font-size: 0.9375rem;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.nav-toggle-bars,
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+  display: block;
+  width: 1.1rem;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.nav-toggle-bars {
+  position: relative;
+}
+
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+  content: "";
+  position: absolute;
+  left: 0;
+}
+
+.nav-toggle-bars::before { top: -0.35rem; }
+.nav-toggle-bars::after { top: 0.35rem; }
+
+/* -------- Màn hẹp: gom vào nút Menu, nhánh dạng accordion -------- */
+.site-header.is-compact #navToggle {
+  display: inline-flex;
+}
+
+.site-header.is-compact .main-nav {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.5rem clamp(14px, 2.5vw, 28px) 0.75rem;
+  max-height: calc(100vh - var(--site-header-h));
+  overflow-y: auto;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--nav-line);
+  box-shadow: 0 16px 28px rgba(15, 10, 40, 0.38);
+}
+
+.site-header.is-compact.is-open .main-nav {
+  display: block;
+}
+
+.site-header.is-compact .nav-list {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.125rem;
+}
+
+.site-header.is-compact #mainNav .nav-link {
+  width: 100%;
+  justify-content: space-between;
+  min-height: 3rem !important;
+  padding: 0.6rem 0.75rem !important;
+  font-size: 1rem;
+  text-align: left;
+}
+
+/* Chấm nhấn chuyển sang vạch bên trái cho hợp với danh sách dọc */
+.site-header.is-compact #mainNav .nav-item.is-active > .nav-link::after {
+  left: 0.2rem;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  width: 3px;
+  height: auto;
+  border-radius: 3px;
+  transform: none;
+}
+
+/* Đổi mũi tên thành dấu cộng / trừ */
+.site-header.is-compact .nav-caret {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  border: 0;
+  transform: none;
+  text-align: center;
+  line-height: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.site-header.is-compact .nav-caret::before {
+  content: "+";
+}
+
+.site-header.is-compact .nav-link[aria-expanded="true"] .nav-caret::before {
+  content: "\2212";
+}
+
+.site-header.is-compact .nav-sub {
+  position: static;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  margin: 0 0 0.25rem;
+  padding: 0 0 0 0.75rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.site-header.is-compact #mainNav .nav-sub-link {
+  min-height: 2.75rem !important;
+  white-space: normal;
+}
+
+.site-header.is-compact .site-brand-logo {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.site-header.is-compact .site-brand-name {
+  height: 2.75rem;
+}
+
+/* Các khối được cuộn tới bằng scrollIntoView không bị header che */
+#dashboardSection,
+#quizSection,
+#tensesView,
+#chineseView,
+#vocabView,
+.tenses-view {
+  scroll-margin-top: calc(var(--site-header-h) + 0.75rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-caret {
+    transition: none;
+  }
+}
