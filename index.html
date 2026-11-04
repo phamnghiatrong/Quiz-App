@@ -79,6 +79,7 @@
     <link rel="stylesheet" href="./style-final-fix.css?v=20261104-2" />
     <link rel="stylesheet" href="./theme.css?v=20261104-2" />
     <link rel="stylesheet" href="./menu.css?v=20261104-2" />
+    <link rel="stylesheet" href="./group.css?v=20261104-1" />
     <style>
       /* Đảm bảo thuộc tính hidden luôn có tác dụng và không bị ghi đè bởi CSS khác */
       html body [hidden] {
@@ -429,10 +430,21 @@
             <ul class="about-list">
               <li><strong>Họ tên:</strong> <span id="accountName">...</span></li>
               <li><strong>Email:</strong> <span id="accountEmail">...</span></li>
+              <li><strong>Mã sinh viên:</strong> <span id="accountStudentCode">Chưa có</span></li>
             </ul>
 
             <div class="account-actions">
               <button id="editNameBtn" class="ghost-btn" type="button">Đổi tên</button>
+              <button id="editStudentCodeBtn" class="ghost-btn" type="button">Cập nhật mã sinh viên</button>
+            </div>
+
+            <div id="editStudentCodeForm" class="auth-form" hidden>
+              <label for="studentCodeInput">Mã sinh viên</label>
+              <input id="studentCodeInput" class="group-code-input" type="text" maxlength="20" placeholder="4-20 ký tự chữ hoặc số" autocomplete="off" autocapitalize="characters" />
+              <div class="inline-actions">
+                <button id="saveStudentCodeBtn" class="primary-btn" type="button">Lưu</button>
+                <button id="cancelStudentCodeBtn" class="ghost-btn" type="button">Hủy</button>
+              </div>
             </div>
 
                         <div id="editNameForm" class="auth-form" hidden>

@@ -1,0 +1,502 @@
+/* group.css - Giao diện Học nhóm. Link sau menu.css.
+   style-final-fix.css đặt luật !important cho mọi button (nền, chữ, viền, min-height), input và
+   span/p/td, nên một số khai báo ở đây phải kèm !important và dùng #classContent, #groupDialog,
+   #groupMenu để thắng. Chỉ dùng !important ở những chỗ đó, màu lấy từ biến --app-*. */
+
+/* ---------- Đầu màn hình ---------- */
+.group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  margin-bottom: 0.75rem;
+}
+
+.group-head h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.group-head-main {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.group-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 1.25rem;
+}
+
+.group-section-title {
+  margin: 1.25rem 0 0.5rem;
+}
+
+.group-section-head .group-section-title {
+  margin: 0;
+}
+
+.group-section-head + .table-wrap,
+.group-section-head + .muted-text {
+  margin-top: 0.5rem;
+}
+
+#classContent .group-msg {
+  margin: 0 0 0.75rem;
+}
+
+/* status-text mặc định bị style-final-fix.css ép màu mờ */
+#classContent .group-msg.error {
+  color: var(--app-bad) !important;
+}
+
+#classContent .group-msg.success {
+  color: var(--app-ok) !important;
+}
+
+/* ---------- Danh sách: hàng có đường kẻ, không có ô nền riêng ---------- */
+.group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.group-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--app-line);
+}
+
+.group-row-main {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.group-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+#classContent .group-row-name {
+  font-weight: 700;
+  color: var(--app-ink) !important;
+  overflow-wrap: anywhere;
+}
+
+/* Tên nhóm bấm được: bỏ dáng nút chung */
+#classContent button.group-link {
+  min-height: 0 !important;
+  padding: 2px 0 !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  font-size: inherit;
+  text-align: left;
+}
+
+#classContent button.group-link:hover {
+  color: var(--app-accent-2) !important;
+  text-decoration: underline;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+#classContent .group-row-meta,
+#classContent .group-hint,
+#groupDialog .group-hint {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--app-ink-3) !important;
+  overflow-wrap: anywhere;
+}
+
+.group-row-side {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+#classContent .group-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--app-surface-2);
+  color: var(--app-ink-2) !important;
+}
+
+#classContent .group-tag.is-live {
+  background: var(--app-bad-soft);
+  color: var(--app-bad-ink) !important;
+}
+
+#classContent .group-tag.is-wait {
+  background: var(--app-warn-soft);
+  color: var(--app-warn-ink) !important;
+}
+
+/* ---------- Nút bánh răng ---------- */
+#classContent button.group-gear {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 0 !important;
+  color: var(--app-ink-2) !important;
+}
+
+#classContent .group-gear-dot {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--app-bad);
+  color: var(--app-on-fill) !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* ---------- Menu nhỏ ---------- */
+#groupMenu {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 12px;
+  background: var(--app-surface-solid);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.24);
+}
+
+#groupMenu button.group-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  font-weight: 600 !important;
+  text-align: left;
+  color: var(--app-ink) !important;
+}
+
+#groupMenu button.group-menu-item:hover,
+#groupMenu button.group-menu-item:focus-visible {
+  background: var(--app-surface-2) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+#groupMenu .group-menu-label {
+  color: inherit !important;
+  font-weight: inherit !important;
+}
+
+#groupMenu button.group-menu-item.is-danger {
+  color: var(--app-bad) !important;
+}
+
+#groupMenu .group-menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--app-line);
+}
+
+#groupMenu .group-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--app-bad);
+  color: var(--app-on-fill) !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* ---------- Hộp thoại ---------- */
+#groupDialog {
+  width: min(30rem, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 20px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 16px;
+  background: var(--app-surface-solid);
+  color: var(--app-ink);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.32);
+}
+
+#groupDialog::backdrop {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+#groupDialog h3 {
+  margin: 0 0 0.75rem;
+}
+
+.group-dialog-body {
+  display: grid;
+  gap: 6px;
+}
+
+.group-dialog-body > p {
+  margin: 0 0 6px;
+}
+
+.group-dialog-body label {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.group-dialog-body > input,
+.group-dialog-body > select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#groupDialog .group-dialog-msg {
+  margin: 12px 0 0;
+  font-size: 0.9375rem;
+}
+
+#groupDialog .group-dialog-msg.error {
+  color: var(--app-bad) !important;
+}
+
+#groupDialog .group-dialog-msg.success {
+  color: var(--app-ok) !important;
+}
+
+.group-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.group-code-input {
+  text-transform: uppercase;
+}
+
+#groupDialog .group-copy-row {
+  display: flex;
+  gap: 8px;
+}
+
+#groupDialog .group-copy-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#groupDialog .group-code-value {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.group-invite-regen {
+  margin-top: 12px;
+}
+
+/* Đỏ cho nút xoá: style-final-fix.css ép .primary-btn thành nền tím */
+#groupDialog button.primary-btn.is-danger,
+#classContent button.primary-btn.is-danger {
+  background: var(--app-bad) !important;
+  border-color: var(--app-bad) !important;
+  color: var(--app-on-fill) !important;
+}
+
+#groupDialog button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Bảng thành viên ---------- */
+.group-table th {
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.group-table td {
+  vertical-align: middle;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.group-cell-name {
+  font-weight: 600 !important;
+  white-space: nowrap;
+}
+
+/* Dòng phụ chỉ dùng cho bản 2 dòng trên điện thoại */
+.group-cell-sub {
+  display: none;
+}
+
+.group-col-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.group-cell-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Màn hình hẹp: mỗi người một hàng 2 dòng thay cho bảng nhiều cột */
+@media (max-width: 860px) {
+  .group-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .group-table,
+  .group-table tbody {
+    display: block;
+    width: 100% !important;
+  }
+
+  .group-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--app-line);
+  }
+
+  .group-table td {
+    display: block;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+
+  .group-table .group-col-wide {
+    display: none;
+  }
+
+  .group-table .group-col-name {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  .group-table .group-col-actions {
+    flex: none;
+    max-width: 100%;
+  }
+
+  .group-table .group-col-actions:empty {
+    display: none;
+  }
+
+  .group-cell-name {
+    display: block;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #classContent .group-cell-sub {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.875rem;
+    color: var(--app-ink-3) !important;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ---------- Điện thoại ---------- */
+#groupDialog .group-copy-row button {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* style-final-fix.css ép mọi button rộng 100% trên màn hẹp, ở đây nút giữ đúng cỡ chữ của nó */
+@media (max-width: 768px) {
+  #classContent .group-head button,
+  #classContent .group-row-side button,
+  #classContent .group-cell-actions button,
+  #classContent .group-col-actions button,
+  #classContent .group-section-head button,
+  #groupDialog .group-copy-row button,
+  #groupDialog .group-dialog-actions button,
+  #groupDialog .group-invite-regen button {
+    width: auto !important;
+  }
+
+  #groupMenu button.group-menu-item {
+    width: 100% !important;
+  }
+
+  .group-head-actions {
+    flex: 1 1 100%;
+  }
+
+  #classContent .group-head-actions:has(.group-gear) {
+    flex: none;
+  }
+
+  #classContent .group-head-actions button:not(.group-gear) {
+    flex: 1 1 0;
+  }
+}

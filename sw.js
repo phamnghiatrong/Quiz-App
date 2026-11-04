@@ -5,7 +5,7 @@
    - Ưu tiên lấy dữ liệu mới khi online (network-first cho navigation).
 */
 
-const CACHE_NAME = 'quiz-app-v4';
+const CACHE_NAME = 'quiz-app-v5';
 
 // Chỉ liệt kê file CÓ THẬT. Đường dẫn tương đối để chạy đúng cả khi mở
 // bằng Live Server lẫn khi deploy lên Vercel.
@@ -16,6 +16,7 @@ const APP_SHELL = [
   './style-final-fix.css',
   './theme.css',
   './menu.css',
+  './group.css',
   './app.js',
   './settings.js',
   './config.js',

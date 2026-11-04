@@ -1185,6 +1185,8 @@ returns table (
   member_count     bigint,
   pending_count    bigint,
   has_running_quiz boolean,
+  running_end_at   timestamptz,
+  server_now       timestamptz,
   class_code       text,
   subject_slug     text,
   created_at       timestamptz
@@ -1208,6 +1210,12 @@ as $$
       select 1 from public.class_quizzes q
       where q.class_id = c.id and public.class_quiz_effective_status(q.status, q.end_at) = 'running'
     ),
+    -- Giờ đóng của bài đang mở và giờ server, để danh sách hiện "Còn mm:ss" đúng giờ server.
+    case when cm.status = 'active' then (
+      select min(q.end_at) from public.class_quizzes q
+      where q.class_id = c.id and public.class_quiz_effective_status(q.status, q.end_at) = 'running'
+    ) end,
+    now(),
     -- Mã mời chỉ trả cho chủ nhóm và quản trị viên.
     case when cm.status = 'active' and (c.owner_id = auth.uid() or cm.role = 'admin') then c.class_code end,
     c.subject_slug,

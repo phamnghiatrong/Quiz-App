@@ -79,6 +79,12 @@ const elements = {
     accountView: document.getElementById('accountView'),
   accountName: document.getElementById('accountName'),
   accountEmail: document.getElementById('accountEmail'),
+  accountStudentCode: document.getElementById('accountStudentCode'),
+  editStudentCodeBtn: document.getElementById('editStudentCodeBtn'),
+  editStudentCodeForm: document.getElementById('editStudentCodeForm'),
+  studentCodeInput: document.getElementById('studentCodeInput'),
+  saveStudentCodeBtn: document.getElementById('saveStudentCodeBtn'),
+  cancelStudentCodeBtn: document.getElementById('cancelStudentCodeBtn'),
   accountMessage: document.getElementById('accountMessage'),
 
   editNameBtn: document.getElementById('editNameBtn'),
@@ -198,6 +204,7 @@ function resetCaptcha(slotId) {
 let currentMode = null;
 let currentView = 'auth';
 let currentUserId = null; // Dùng để tách bài đang làm theo từng tài khoản
+let currentStudentCode = ''; // Mã sinh viên trong hồ sơ, rỗng nếu chưa có
 let currentUserDisplayName = ''; // Họ tên (hoặc email) của tài khoản đang đăng nhập
 let selectedSubjectSlug = null; // Môn đang được click trên UI
 let confirmedSubjectSlug = null; // Môn đã được xác nhận
@@ -792,6 +799,9 @@ function setView(viewKey) {
   });
 
   if (elements.editNameForm) elements.editNameForm.hidden = true;
+  if (elements.editStudentCodeForm) elements.editStudentCodeForm.hidden = true;
+  closeGroupMenu();
+  closeGroupDialog();
 
   switch (targetView) {
     case 'home':
@@ -829,14 +839,14 @@ function setView(viewKey) {
     case 'classes':
       showSection('dashboard');
       if (elements.classCard) elements.classCard.hidden = false;
-      // Nếu đã được yêu cầu mở sẵn màn "tham gia lớp" kèm mã mời (từ link
-      // ?join=CODE) thì giữ nguyên, không reset về danh sách lớp.
-      if (classState.screen === 'join' && classState.joinCodePrefill) {
-        renderClassScreen();
-      } else {
-        classState.screen = 'list';
-        classSetMessage('');
-        loadMyClasses();
+      classState.screen = 'list';
+      classSetMessage('');
+      loadMyClasses();
+      // Đi từ link mời ?join=MÃ: mở sẵn hộp thoại tham gia, người dùng vẫn phải bấm gửi.
+      if (classState.joinCodePrefill) {
+        const code = classState.joinCodePrefill;
+        classState.joinCodePrefill = '';
+        openJoinDialog(code);
       }
       break;
     case 'english':
@@ -1126,7 +1136,7 @@ function buildNavTree() {
     { id: 'home', label: 'Trang chủ', view: 'home' },
     { id: 'subjects', label: 'Môn học', children: subjectChildren('subject') },
     { id: 'leaderboard', label: 'Bảng xếp hạng', children: subjectChildren('leaderboard') },
-    { id: 'classes', label: 'Lớp học', view: 'classes' },
+    { id: 'classes', label: 'Học nhóm', view: 'classes' },
     {
       id: 'languages',
       label: 'Học ngoại ngữ',
@@ -1492,7 +1502,11 @@ function updateUserUI(session) {
 
   // Chỉ xoá khi đổi trạng thái đăng nhập. Đăng nhập sai không vào đây nên vẫn giữ để gõ lại,
   // và lúc mở app (rỗng -> rỗng) không xoá mất chữ người dùng đang gõ.
-  if (previousUserId !== currentUserId) clearPasswordFields();
+  if (previousUserId !== currentUserId) {
+    clearPasswordFields();
+    resetClassState();
+    setCurrentStudentCode('');
+  }
 
   if (!user) {
     // Không để tài khoản đăng nhập sau thừa hưởng môn đang chọn của tài khoản trước.
@@ -1537,6 +1551,56 @@ async function ensureProfileForSession(session) {
     if (elements.accountEmail) elements.accountEmail.textContent = session?.user?.email || '';
     if (elements.newNameInput) elements.newNameInput.value = '';
   }
+
+  await loadStudentCode(user.id);
+}
+
+function setCurrentStudentCode(code) {
+  currentStudentCode = code || '';
+  if (elements.accountStudentCode) elements.accountStudentCode.textContent = currentStudentCode || 'Chưa có';
+}
+
+// Truy vấn riêng với họ tên: nếu migration chưa chạy (chưa có cột) thì họ tên vẫn hiện bình thường.
+async function loadStudentCode(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('student_code')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (userId === currentUserId) setCurrentStudentCode(data?.student_code);
+  } catch (error) {
+    console.warn('Không tải được Mã sinh viên:', error);
+  }
+}
+
+async function saveStudentCode() {
+  const code = (elements.studentCodeInput?.value || '').trim().toUpperCase();
+  if (!STUDENT_CODE_PATTERN.test(code)) {
+    setStatus(STUDENT_CODE_HINT, 'error');
+    return;
+  }
+  try {
+    const { data, error } = await supabase.rpc('set_my_student_code', { p_code: code });
+    if (error) throw error;
+    setCurrentStudentCode(data);
+    if (elements.editStudentCodeForm) elements.editStudentCodeForm.hidden = true;
+    setStatus('Đã lưu Mã sinh viên.', 'success');
+  } catch (error) {
+    setStatus(error?.message || 'Không lưu được Mã sinh viên.', 'error');
+  }
+}
+
+function openEditStudentCode() {
+  if (!elements.editStudentCodeForm) return;
+  if (elements.studentCodeInput) elements.studentCodeInput.value = currentStudentCode;
+  elements.editStudentCodeForm.hidden = false;
+  elements.studentCodeInput?.focus();
+}
+
+function cancelEditStudentCode() {
+  if (elements.editStudentCodeForm) elements.editStudentCodeForm.hidden = true;
 }
 
 
@@ -1990,6 +2054,14 @@ async function checkSession() {
 }
 
 
+function openPendingJoinLink() {
+  if (classState.joinCodePrefill && currentUserId) navigateTo('classes');
+}
+
+// Lúc đăng nhập bằng form, sự kiện SIGNED_IN chạy trước rồi handleAuthSubmit mới về trang chủ.
+// Cờ này để chỉ mở link mời ở bước cuối, không bị lần về trang chủ thứ hai đóng mất hộp thoại.
+let authSubmitRunning = false;
+
 async function handleAuthSubmit(event) {
   event.preventDefault();
 
@@ -2012,6 +2084,7 @@ async function handleAuthSubmit(event) {
 
   elements.authSubmitBtn.disabled = true;
   setStatus('Đang xử lý...', 'info');
+  authSubmitRunning = true;
 
   try {
     if (authMode === 'register') {
@@ -2052,6 +2125,7 @@ async function handleAuthSubmit(event) {
         await ensureProfileForSession(data.session);
         updateRetryWrongButton();
         setView('home');
+        openPendingJoinLink();
       }
 
     } else {
@@ -2066,6 +2140,7 @@ async function handleAuthSubmit(event) {
       await ensureProfileForSession(data.session);
       updateRetryWrongButton();
       setView('home');
+      openPendingJoinLink();
       setStatus('Đăng nhập thành công.', 'success');
 
     }
@@ -2082,6 +2157,7 @@ async function handleAuthSubmit(event) {
     }
     setStatus(errorMsg, 'error');
   } finally {
+    authSubmitRunning = false;
     // Token captcha chỉ dùng 1 lần -> lấy token mới cho lần bấm tiếp theo
     if (captchaUsed) resetCaptcha('authCaptcha');
     elements.authSubmitBtn.disabled = false;
@@ -3209,20 +3285,24 @@ async function loadLeaderboard(slug) {
 
 
 // =============================================================================
-// LỚP HỌC (KIỂM TRA THEO LỚP) - Phase 1 MVP
-// Toàn bộ UI được render động vào elements.classContent, điều hướng nội bộ
-// qua classState.screen. Sự kiện click dùng event delegation (wireClassEvents)
-// gắn 1 lần lên elements.classContent, không cần re-attach sau mỗi lần render.
+// HỌC NHÓM
+// Trên giao diện gọi là "Học nhóm" / "nhóm". Tên nội bộ giữ nguyên để không vỡ luồng cũ:
+// view key classes, classState, #classCard, #classContent, bảng và hàm class_*, link ?join=MÃ.
+// Toàn bộ UI được render động vào elements.classContent, điều hướng nội bộ qua
+// classState.screen. Sự kiện click dùng event delegation (wireClassEvents) gắn 1 lần lên
+// elements.classContent. Quyền thật nằm trong RPC ở server, giao diện chỉ ẩn/hiện nút.
 // =============================================================================
 
-const classState = {
-  screen: 'list', // list | create | join | detail | members | createQuiz | takeQuiz | review | quizResults
-  classes: [],
+const newClassState = () => ({
+  screen: 'list', // list | detail | members | createQuiz | takeQuiz | review | quizResults
+  groups: [],
   classId: null,
   classDetail: null,
   quizzes: [],
   quizId: null,
   members: [],
+  joinRequests: [],
+  returnTo: 'list', // Màn thành viên / tạo bài mở từ danh sách hay từ trong nhóm
   lessonsForQuiz: [],
   attemptId: null,
   takeQuizQuestions: [],
@@ -3239,7 +3319,18 @@ const classState = {
   loading: false,
   message: '',
   messageVariant: 'info',
-};
+});
+
+const classState = newClassState();
+
+// Đăng xuất / đổi tài khoản: không để tài khoản sau thấy dữ liệu nhóm của tài khoản trước.
+function resetClassState() {
+  stopClassQuizTimer();
+  closeGroupMenu();
+  closeGroupDialog();
+  const keepJoinCode = classState.joinCodePrefill;
+  Object.assign(classState, newClassState(), { joinCodePrefill: keepJoinCode });
+}
 
 function classSetMessage(message, variant = 'info') {
   classState.message = message || '';
@@ -3248,7 +3339,7 @@ function classSetMessage(message, variant = 'info') {
 
 function classMessageHtml() {
   if (!classState.message) return '';
-  return `<p class="status-text ${escapeHtml(classState.messageVariant)}" aria-live="polite">${escapeHtml(classState.message)}</p>`;
+  return `<p class="status-text group-msg ${escapeHtml(classState.messageVariant)}" aria-live="polite">${escapeHtml(classState.message)}</p>`;
 }
 
 function formatClassDate(value) {
@@ -3260,19 +3351,41 @@ function formatClassDate(value) {
   }
 }
 
-function classStatusLabel(status) {
-  switch (status) {
-    case 'submitted': return 'Đã nộp';
-    case 'in_progress': return 'Đang làm dở';
-    default: return 'Chưa làm';
+function groupRoleLabel(role) {
+  switch (role) {
+    case 'owner': return 'Người tạo nhóm';
+    case 'admin': return 'Quản trị viên';
+    default: return 'Người tham gia';
   }
+}
+
+function isGroupManager(role) {
+  return role === 'owner' || role === 'admin';
+}
+
+// Vẽ lại nội dung mà không làm mất ô đang focus (người dùng bàn phím, tự làm mới danh sách).
+function paintClassContent(html) {
+  const root = elements.classContent;
+  if (!root) return;
+  const active = document.activeElement;
+  const selector = active && root.contains(active) ? groupFocusSelector(active) : null;
+  root.innerHTML = html;
+  if (selector) root.querySelector(selector)?.focus({ preventScroll: true });
+}
+
+function groupFocusSelector(el) {
+  if (!el?.dataset?.classAction) return null;
+  const attrs = ['classAction', 'classId', 'quizId', 'userId'];
+  const toAttr = (key) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+  return attrs
+    .filter((key) => el.dataset[key])
+    .map((key) => `[${toAttr(key)}="${CSS.escape(el.dataset[key])}"]`)
+    .join('');
 }
 
 async function renderClassScreen() {
   if (!elements.classContent) return;
   switch (classState.screen) {
-    case 'create': return renderClassCreateForm();
-    case 'join': return renderClassJoinForm();
     case 'detail': return renderClassDetailScreen();
     case 'members': return renderClassMembersScreen();
     case 'createQuiz': return renderCreateQuizForm();
@@ -3285,376 +3398,938 @@ async function renderClassScreen() {
   }
 }
 
-// ---------- 1. Danh sách lớp -------------------------------------------------
+// ---------- Hộp thoại <dialog> dùng chung ------------------------------------
 
-async function loadMyClasses() {
+let groupDialogEl = null;
+
+function closeGroupDialog() {
+  if (groupDialogEl?.open) groupDialogEl.close();
+}
+
+// onSubmit(api) trả về false thì giữ hộp thoại mở (ví dụ báo lỗi ngay trong hộp thoại).
+function openGroupDialog({ title, bodyHtml, submitLabel, danger = false, onSubmit, onOpen, onClose, cancelLabel = 'Huỷ' }) {
+  closeGroupMenu();
+  closeGroupDialog();
+  const returnFocus = groupFocusSelector(document.activeElement);
+
+  const dialog = document.createElement('dialog');
+  dialog.id = 'groupDialog';
+  dialog.setAttribute('aria-labelledby', 'groupDialogTitle');
+  dialog.innerHTML = `
+    <form class="group-dialog-form" method="dialog" novalidate>
+      <h3 id="groupDialogTitle">${escapeHtml(title)}</h3>
+      <div class="group-dialog-body">${bodyHtml}</div>
+      <p class="group-dialog-msg" data-dialog-msg aria-live="polite" hidden></p>
+      <div class="group-dialog-actions">
+        <button class="ghost-btn" type="button" data-dialog-cancel>${escapeHtml(cancelLabel)}</button>
+        ${submitLabel ? `<button class="primary-btn ${danger ? 'is-danger' : ''}" type="submit" data-dialog-submit>${escapeHtml(submitLabel)}</button>` : ''}
+      </div>
+    </form>
+  `;
+  document.body.appendChild(dialog);
+  groupDialogEl = dialog;
+
+  const form = dialog.querySelector('form');
+  const msg = dialog.querySelector('[data-dialog-msg]');
+  const submitBtn = dialog.querySelector('[data-dialog-submit]');
+  const api = {
+    dialog,
+    form,
+    submitBtn,
+    setMessage(text, variant = 'error') {
+      msg.textContent = text || '';
+      msg.hidden = !text;
+      msg.className = `group-dialog-msg ${variant}`;
+    },
+    close: () => dialog.close(),
+  };
+
+  dialog.querySelector('[data-dialog-cancel]').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (e) => {
+    const toggle = e.target.closest('[data-group-password-toggle]');
+    if (toggle) toggleGroupPassword(toggle, dialog);
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!onSubmit || submitBtn?.disabled) return;
+    if (submitBtn) submitBtn.disabled = true;
+    api.setMessage('');
+    let keepOpen = true;
+    try {
+      keepOpen = (await onSubmit(api)) === false;
+    } catch (err) {
+      api.setMessage(err?.message || 'Có lỗi xảy ra, vui lòng thử lại.');
+    }
+    if (!dialog.isConnected) return;
+    if (keepOpen) {
+      if (submitBtn && !submitBtn.dataset.locked) submitBtn.disabled = false;
+    } else {
+      dialog.close();
+    }
+  });
+  dialog.addEventListener('close', () => {
+    dialog.remove();
+    if (groupDialogEl === dialog) groupDialogEl = null;
+    onClose?.();
+    // Nút mở hộp thoại có thể đã được vẽ lại, tìm lại theo thuộc tính thay vì giữ tham chiếu cũ.
+    if (returnFocus) elements.classContent?.querySelector(returnFocus)?.focus({ preventScroll: true });
+  });
+
+  dialog.showModal();
+  onOpen?.(api);
+  const first = dialog.querySelector('input:not([type="hidden"]), select, textarea');
+  if (first) {
+    first.focus();
+  } else {
+    dialog.querySelector('[data-dialog-cancel]').focus();
+  }
+  return api;
+}
+
+function groupConfirm({ title, message, confirmLabel, danger = false }) {
+  return new Promise((resolve) => {
+    let answered = false;
+    openGroupDialog({
+      title,
+      bodyHtml: `<p>${escapeHtml(message)}</p>`,
+      submitLabel: confirmLabel,
+      danger,
+      onSubmit: () => {
+        answered = true;
+        resolve(true);
+      },
+      onClose: () => {
+        if (!answered) resolve(false);
+      },
+    });
+  });
+}
+
+// Đặt lại biểu tượng con mắt của ô mật khẩu trong hộp thoại / form bài kiểm tra.
+const GROUP_EYE_ICONS = `
+  <svg class="icon-eye" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 5c-5.5 0-9.5 4.5-10.5 7 1 2.5 5 7 10.5 7s9.5-4.5 10.5-7c-1-2.5-5-7-10.5-7zm0 11.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+  <svg class="icon-eye-off" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3.28 2.22 2.22 3.28l3.4 3.4C3.53 8.1 1.94 9.9 1 12c1 2.5 5 7 11 7 1.98 0 3.75-.5 5.26-1.28l3.24 3.24 1.06-1.06L3.28 2.22zM12 16.5c-2.48 0-4.5-2.02-4.5-4.5 0-.74.18-1.43.5-2.04l6.04 6.04c-.61.32-1.3.5-2.04.5zm0-9c2.48 0 4.5 2.02 4.5 4.5 0 .43-.06.85-.18 1.24l3.06 3.06C21.4 14.6 22.5 13 23 12c-1-2.5-5-7-11-7-1.27 0-2.47.2-3.57.57l2.33 2.33c.39-.12.81-.4 1.24-.4z"/></svg>
+`;
+
+function groupPasswordInputHtml(id, label, attrs = '') {
+  return `
+    <label for="${id}">${escapeHtml(label)}</label>
+    <div class="password-field-wrap group-password-wrap">
+      <input id="${id}" type="password" autocomplete="off" ${attrs} />
+      <button type="button" class="password-toggle-btn" data-group-password-toggle="${id}" aria-label="Hiện mật khẩu" aria-pressed="false">${GROUP_EYE_ICONS}</button>
+    </div>
+  `;
+}
+
+function toggleGroupPassword(btn, scope) {
+  const input = scope.querySelector(`#${CSS.escape(btn.dataset.groupPasswordToggle)}`);
+  if (!input) return;
+  const willShow = input.type === 'password';
+  input.type = willShow ? 'text' : 'password';
+  btn.setAttribute('aria-pressed', String(willShow));
+  btn.setAttribute('aria-label', willShow ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+  input.focus({ preventScroll: true });
+}
+
+// ---------- Menu nhỏ dùng chung (bánh răng, thao tác với thành viên) ---------
+
+let groupMenuState = null;
+
+function closeGroupMenu({ refocus = false } = {}) {
+  if (!groupMenuState) return;
+  const { menu, anchor, onDocPointer, onKey, onViewportChange } = groupMenuState;
+  groupMenuState = null;
+  menu.remove();
+  document.removeEventListener('pointerdown', onDocPointer, true);
+  document.removeEventListener('keydown', onKey, true);
+  window.removeEventListener('resize', onViewportChange);
+  window.removeEventListener('scroll', onViewportChange, true);
+  anchor.setAttribute('aria-expanded', 'false');
+  if (refocus && anchor.isConnected) anchor.focus({ preventScroll: true });
+}
+
+// items: { label, badge?, danger?, separatorBefore?, run }
+function openGroupMenu(anchor, label, items) {
+  const wasOpenHere = groupMenuState?.anchor === anchor;
+  closeGroupMenu();
+  if (wasOpenHere) return;
+
+  const menu = document.createElement('div');
+  menu.id = 'groupMenu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', label);
+  menu.innerHTML = items.map((item, i) => `
+    ${item.separatorBefore ? '<div class="group-menu-sep" role="separator"></div>' : ''}
+    <button class="group-menu-item ${item.danger ? 'is-danger' : ''}" type="button" role="menuitem" data-menu-index="${i}">
+      <span class="group-menu-label">${escapeHtml(item.label)}</span>
+      ${item.badge ? `<span class="group-count">${Number(item.badge)}</span>` : ''}
+    </button>
+  `).join('');
+  document.body.appendChild(menu);
+
+  const rect = anchor.getBoundingClientRect();
+  const box = menu.getBoundingClientRect();
+  const margin = 8;
+  const left = Math.min(Math.max(margin, rect.right - box.width), window.innerWidth - box.width - margin);
+  const below = rect.bottom + 6;
+  const top = below + box.height + margin > window.innerHeight ? Math.max(margin, rect.top - box.height - 6) : below;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+
+  const buttons = [...menu.querySelectorAll('[role="menuitem"]')];
+  const onDocPointer = (e) => {
+    if (menu.contains(e.target) || anchor.contains(e.target)) return;
+    closeGroupMenu();
+  };
+  const onKey = (e) => {
+    const index = buttons.indexOf(document.activeElement);
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeGroupMenu({ refocus: true });
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      buttons[(index + 1) % buttons.length].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      buttons[(index - 1 + buttons.length) % buttons.length].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      buttons[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      buttons[buttons.length - 1].focus();
+    } else if (e.key === 'Tab') {
+      closeGroupMenu();
+    }
+  };
+  const onViewportChange = (e) => {
+    if (e?.target && menu.contains?.(e.target)) return;
+    closeGroupMenu();
+  };
+  menu.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-menu-index]');
+    if (!btn) return;
+    const item = items[Number(btn.dataset.menuIndex)];
+    closeGroupMenu({ refocus: true });
+    item?.run();
+  });
+
+  document.addEventListener('pointerdown', onDocPointer, true);
+  document.addEventListener('keydown', onKey, true);
+  window.addEventListener('resize', onViewportChange);
+  window.addEventListener('scroll', onViewportChange, true);
+  anchor.setAttribute('aria-expanded', 'true');
+  groupMenuState = { menu, anchor, onDocPointer, onKey, onViewportChange };
+  buttons[0]?.focus({ preventScroll: true });
+}
+
+// ---------- 1. Danh sách nhóm ------------------------------------------------
+
+async function loadMyClasses({ silent = false } = {}) {
   if (configError || !currentUserId) return;
-  classState.loading = true;
-  renderClassListScreen();
-  try {
-    const { data, error } = await supabase.rpc('get_my_classes');
-    if (error) throw error;
-    classState.classes = data || [];
-  } catch (err) {
-    classSetMessage(err.message || 'Không tải được danh sách lớp.', 'error');
-    classState.classes = [];
-  } finally {
-    classState.loading = false;
+  const userId = currentUserId;
+  if (!silent) {
+    classState.loading = true;
     renderClassListScreen();
   }
+  try {
+    const { data, error } = await supabase.rpc('get_my_groups');
+    if (error) throw error;
+    if (userId !== currentUserId) return;
+    classState.groups = data || [];
+  } catch (err) {
+    if (userId !== currentUserId) return;
+    if (!silent) {
+      classSetMessage(err.message || 'Không tải được danh sách nhóm.', 'error');
+      classState.groups = [];
+    }
+  } finally {
+    classState.loading = false;
+    if (classState.screen === 'list' && userId === currentUserId) renderClassListScreen();
+  }
+}
+
+function groupRowHtml(g) {
+  const id = escapeHtml(g.class_id);
+  const pending = g.my_status === 'pending';
+  const manager = !pending && isGroupManager(g.my_role);
+  const name = pending
+    ? `<span class="group-row-name">${escapeHtml(g.name)}</span>`
+    : `<button class="group-row-name group-link" type="button" data-class-action="open-class" data-class-id="${id}">${escapeHtml(g.name)}</button>`;
+  const liveTag = g.has_running_quiz ? '<span class="group-tag is-live">Đang kiểm tra</span>' : '';
+
+  let meta;
+  if (pending) {
+    meta = `Người mở nhóm: ${escapeHtml(g.owner_name)} · <span class="group-tag is-wait">Đang chờ duyệt</span>`;
+  } else if (manager) {
+    meta = `${escapeHtml(groupRoleLabel(g.my_role))} · ${Number(g.member_count || 0)} người tham gia`;
+  } else {
+    meta = `Người mở nhóm: ${escapeHtml(g.owner_name)} · Người tham gia`;
+  }
+
+  let side;
+  if (pending) {
+    side = `<button class="ghost-btn" type="button" data-class-action="cancel-request" data-class-id="${id}">Huỷ yêu cầu</button>`;
+  } else if (manager) {
+    side = groupGearHtml(g.class_id, g.pending_count);
+  } else {
+    side = `<button class="ghost-btn" type="button" data-class-action="leave-group" data-class-id="${id}">Rời nhóm</button>`;
+  }
+
+  return `
+    <li class="group-row">
+      <div class="group-row-main">
+        <div class="group-row-title">${name}${liveTag}</div>
+        <p class="group-row-meta">${meta}</p>
+      </div>
+      <div class="group-row-side">${side}</div>
+    </li>
+  `;
+}
+
+function groupGearHtml(classId, pendingCount) {
+  const pending = Number(pendingCount || 0);
+  return `
+    <button class="group-gear" type="button" data-class-action="group-menu" data-class-id="${escapeHtml(classId)}"
+      aria-label="Quản lý nhóm${pending ? `, ${pending} yêu cầu tham gia đang chờ` : ''}" aria-haspopup="menu" aria-expanded="false">
+      ${NAV_ICONS.settings}
+      ${pending ? `<span class="group-gear-dot" aria-hidden="true">${pending}</span>` : ''}
+    </button>
+  `;
 }
 
 function renderClassListScreen() {
   if (!elements.classContent) return;
-  const rows = classState.classes;
-
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Lớp học</p>
-        <h3>Kiểm tra theo lớp</h3>
-      </div>
-      <div class="inline-actions">
-        <button class="ghost-btn" type="button" data-class-action="show-join">Tham gia lớp</button>
-        <button class="primary-btn" type="button" data-class-action="show-create">+ Tạo lớp</button>
+  const rows = classState.groups;
+  paintClassContent(`
+    <div class="group-head">
+      <h2>Học nhóm</h2>
+      <div class="group-head-actions">
+        <button class="ghost-btn" type="button" data-class-action="show-join">Tham gia</button>
+        <button class="primary-btn" type="button" data-class-action="show-create">Tạo nhóm mới</button>
       </div>
     </div>
     ${classMessageHtml()}
-    ${classState.loading ? '<p class="muted-text">Đang tải...</p>' : ''}
-    ${!classState.loading && rows.length === 0 ? '<p class="muted-text">Bạn chưa tham gia lớp nào. Tạo lớp mới hoặc nhập mã lớp để tham gia.</p>' : ''}
-    <div class="table-wrap">
-      ${rows.length > 0 ? `
-        <table>
-          <thead>
-            <tr>
-              <th>Tên lớp</th>
-              <th>Môn</th>
-              <th>Vai trò</th>
-              <th>Thành viên</th>
-              <th>Bài KT</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map((c) => `
-              <tr>
-                <td>${escapeHtml(c.name)}</td>
-                <td>${escapeHtml(getSubjectName(c.subject_slug) || '-')}</td>
-                <td>${c.role === 'admin' ? 'Quản trị' : 'Thành viên'}</td>
-                <td>${Number(c.member_count || 0)}</td>
-                <td>${Number(c.quiz_count || 0)}</td>
-                <td><button class="ghost-btn" type="button" data-class-action="open-class" data-class-id="${escapeHtml(c.class_id)}">Mở lớp</button></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      ` : ''}
-    </div>
-  `;
+    ${classState.loading && rows.length === 0 ? '<p class="muted-text">Đang tải...</p>' : ''}
+    ${!classState.loading && rows.length === 0 ? '<p class="muted-text">Bạn chưa ở trong nhóm nào. Tạo nhóm mới hoặc nhập mã nhóm để tham gia.</p>' : ''}
+    ${rows.length > 0 ? `<ul class="group-list">${rows.map(groupRowHtml).join('')}</ul>` : ''}
+  `);
 }
 
-function renderClassCreateForm() {
-  const subjectOptions = availableSubjects.map((s) => `<option value="${escapeHtml(s.slug)}">${escapeHtml(s.name)}</option>`).join('');
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Lớp học</p>
-        <h3>Tạo lớp mới</h3>
-      </div>
-      <button class="ghost-btn" type="button" data-class-action="back-list">← Quay lại</button>
-    </div>
-    ${classMessageHtml()}
-    <form class="auth-form" data-class-form="create">
-      <label for="classNameInput">Tên lớp</label>
-      <input id="classNameInput" name="name" type="text" placeholder="VD: Lớp Mạng máy tính A1" required />
+// Dùng chung cho bánh răng ở danh sách và ở trong nhóm.
+function groupInfoForMenu(classId) {
+  const row = classState.groups.find((g) => g.class_id === classId);
+  const d = classState.classDetail?.class_id === classId ? classState.classDetail : null;
+  const source = classState.screen === 'list' ? (row || d) : (d || row);
+  if (!source) return null;
+  return {
+    class_id: classId,
+    name: source.name,
+    my_role: source.my_role,
+    class_code: source.class_code,
+    subject_slug: source.subject_slug,
+    pending_count: Number(source.pending_count || 0),
+    has_running_quiz: d && classState.screen !== 'list'
+      ? classState.quizzes.some((q) => q.status === 'running')
+      : Boolean(row?.has_running_quiz),
+  };
+}
 
-      <label for="classDescInput">Mô tả (không bắt buộc)</label>
-      <input id="classDescInput" name="description" type="text" placeholder="VD: Lớp thực hành học kỳ 1" />
+function openGroupManageMenu(anchor, classId) {
+  const group = groupInfoForMenu(classId);
+  if (!group) return;
+  const from = classState.screen === 'list' ? 'list' : 'detail';
+  const isOwner = group.my_role === 'owner';
+  const items = [];
+  if (isOwner) items.push({ label: 'Sửa tên', run: () => openRenameGroupDialog(group) });
+  items.push({ label: 'Tạo bài kiểm tra', run: () => showCreateQuizForm(group.class_id, from) });
+  items.push({ label: 'Xem thành viên', badge: group.pending_count, run: () => openClassMembers(group.class_id, from) });
+  items.push({ label: 'Mã mời', run: () => openInviteDialog(group) });
+  if (isOwner) items.push({ label: 'Xoá nhóm', danger: true, separatorBefore: true, run: () => openDeleteGroupDialog(group) });
+  openGroupMenu(anchor, 'Quản lý nhóm', items);
+}
 
-      <label for="classSubjectInput">Môn học (không bắt buộc)</label>
-      <select id="classSubjectInput" name="subject_slug">
-        <option value="">-- Không gắn môn cụ thể --</option>
+// Sau khi đổi dữ liệu nhóm: tải lại đúng màn đang đứng.
+function reloadCurrentGroupScreen() {
+  if (classState.screen === 'detail' && classState.classId) return openClassDetail(classState.classId);
+  if (classState.screen === 'members' && classState.classId) return openClassMembers(classState.classId, classState.returnTo);
+  classState.screen = 'list';
+  return loadMyClasses();
+}
+
+// ---------- 2. Tạo nhóm, tham gia nhóm ----------------------------------------
+
+function openCreateGroupDialog() {
+  const subjectOptions = availableSubjects
+    .map((s) => `<option value="${escapeHtml(s.slug)}">${escapeHtml(s.name)}</option>`)
+    .join('');
+  openGroupDialog({
+    title: 'Tạo nhóm mới',
+    submitLabel: 'Tạo nhóm',
+    bodyHtml: `
+      <label for="groupNameInput">Tên nhóm</label>
+      <input id="groupNameInput" type="text" maxlength="80" autocomplete="off" placeholder="VD: Nhóm Mạng máy tính A1" />
+      <label for="groupDescInput">Mô tả (không bắt buộc)</label>
+      <input id="groupDescInput" type="text" maxlength="200" autocomplete="off" />
+      <label for="groupSubjectInput">Môn học (không bắt buộc)</label>
+      <select id="groupSubjectInput">
+        <option value="">Không gắn môn cụ thể</option>
         ${subjectOptions}
       </select>
-
-      <button class="primary-btn" type="submit" ${classState.loading ? 'disabled' : ''}>Tạo lớp</button>
-    </form>
-  `;
+    `,
+    onSubmit: async (api) => {
+      const name = normalizeGroupName(api.form.querySelector('#groupNameInput').value);
+      if (!name) {
+        api.setMessage('Vui lòng nhập tên nhóm.');
+        return false;
+      }
+      const { data, error } = await supabase.rpc('create_class', {
+        p_name: name,
+        p_description: api.form.querySelector('#groupDescInput').value.trim() || null,
+        p_subject_slug: api.form.querySelector('#groupSubjectInput').value || null,
+      });
+      if (error) throw error;
+      classSetMessage(`Đã tạo nhóm ${data.name}. Mã mời: ${data.class_code}.`, 'success');
+      classState.screen = 'list';
+      loadMyClasses();
+    },
+  });
 }
 
-function renderClassJoinForm() {
-  const prefill = classState.joinCodePrefill || '';
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Lớp học</p>
-        <h3>Tham gia lớp bằng mã</h3>
+function normalizeGroupName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+const STUDENT_CODE_PATTERN = /^[A-Z0-9]{4,20}$/;
+const STUDENT_CODE_HINT = 'Mã sinh viên gồm 4-20 ký tự chữ hoặc số, không dấu, không khoảng trắng.';
+
+function openJoinDialog(prefill = '') {
+  const needStudentCode = !currentStudentCode;
+  openGroupDialog({
+    title: 'Tham gia nhóm',
+    submitLabel: 'Gửi yêu cầu',
+    bodyHtml: `
+      <label for="groupCodeInput">Mã nhóm</label>
+      <input id="groupCodeInput" class="group-code-input" type="text" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="VD: A1B2C3" value="${escapeHtml(prefill)}" />
+      ${needStudentCode ? `
+        <label for="groupStudentCodeInput">Mã sinh viên</label>
+        <input id="groupStudentCodeInput" class="group-code-input" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" />
+        <p class="group-hint">Mã được lưu vào hồ sơ của bạn, sửa lại được ở trang Tài khoản.</p>
+      ` : ''}
+    `,
+    onSubmit: async (api) => {
+      const code = api.form.querySelector('#groupCodeInput').value.trim().toUpperCase();
+      const studentInput = api.form.querySelector('#groupStudentCodeInput');
+      const studentCode = studentInput ? studentInput.value.trim().toUpperCase() : '';
+      if (!code) {
+        api.setMessage('Vui lòng nhập mã nhóm.');
+        return false;
+      }
+      if (studentInput && !STUDENT_CODE_PATTERN.test(studentCode)) {
+        api.setMessage(STUDENT_CODE_HINT);
+        return false;
+      }
+      const { data, error } = await supabase.rpc('request_join_group', {
+        p_code: code,
+        p_student_code: studentCode || null,
+      });
+      if (error) {
+        // Hồ sơ trên server chưa có mã dù máy này tưởng là có: hỏi lại thay vì báo lỗi cụt.
+        if (!studentInput && /Mã sinh viên/.test(error.message || '')) {
+          setCurrentStudentCode('');
+          setTimeout(() => openJoinDialog(code), 0);
+          return undefined;
+        }
+        throw error;
+      }
+      if (studentCode) setCurrentStudentCode(studentCode);
+      classSetMessage(`Đã gửi yêu cầu tham gia nhóm ${data.name}. Chờ người tạo nhóm duyệt.`, 'success');
+      classState.screen = 'list';
+      loadMyClasses();
+    },
+  });
+}
+
+async function handleCancelJoinRequest(classId) {
+  const group = classState.groups.find((g) => g.class_id === classId);
+  const ok = await groupConfirm({
+    title: 'Huỷ yêu cầu',
+    message: `Huỷ yêu cầu tham gia nhóm ${group?.name || ''}?`,
+    confirmLabel: 'Huỷ yêu cầu',
+  });
+  if (!ok) return;
+  try {
+    const { error } = await supabase.rpc('cancel_join_request', { p_class_id: classId });
+    if (error) throw error;
+    classSetMessage('Đã huỷ yêu cầu tham gia.', 'success');
+  } catch (err) {
+    classSetMessage(err.message || 'Không huỷ được yêu cầu.', 'error');
+  }
+  loadMyClasses();
+}
+
+async function handleLeaveClass(classId) {
+  const group = classState.groups.find((g) => g.class_id === classId);
+  const ok = await groupConfirm({
+    title: 'Rời nhóm',
+    message: `Bạn có chắc muốn rời nhóm ${group?.name || ''}? Kết quả các bài đã làm vẫn được giữ lại.`,
+    confirmLabel: 'Rời nhóm',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const { error } = await supabase.rpc('leave_class', { p_class_id: classId });
+    if (error) throw error;
+    classSetMessage('Đã rời nhóm.', 'success');
+  } catch (err) {
+    classSetMessage(err.message || 'Không rời được nhóm.', 'error');
+  }
+  classState.screen = 'list';
+  loadMyClasses();
+}
+
+// ---------- 3. Sửa tên, mã mời, xoá nhóm ---------------------------------------
+
+function openRenameGroupDialog(group) {
+  openGroupDialog({
+    title: 'Sửa tên nhóm',
+    submitLabel: 'Lưu',
+    bodyHtml: `
+      <label for="groupRenameInput">Tên nhóm</label>
+      <input id="groupRenameInput" type="text" maxlength="80" autocomplete="off" value="${escapeHtml(group.name)}" />
+    `,
+    onOpen: (api) => setTimeout(() => api.form.querySelector('#groupRenameInput')?.select(), 0),
+    onSubmit: async (api) => {
+      const name = normalizeGroupName(api.form.querySelector('#groupRenameInput').value);
+      if (!name) {
+        api.setMessage('Tên nhóm phải có từ 1 đến 80 ký tự.');
+        return false;
+      }
+      const { error } = await supabase.rpc('rename_group', { p_class_id: group.class_id, p_name: name });
+      if (error) throw error;
+      classSetMessage('Đã đổi tên nhóm.', 'success');
+      reloadCurrentGroupScreen();
+    },
+  });
+}
+
+function groupInviteLink(code) {
+  return `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(code)}`;
+}
+
+async function copyGroupText(text, input) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Trình duyệt chặn clipboard: bôi đen sẵn để người dùng tự sao chép.
+    input?.focus();
+    input?.select();
+    try {
+      return document.execCommand('copy');
+    } catch {
+      return false;
+    }
+  }
+}
+
+function openInviteDialog(group) {
+  let code = group.class_code || '';
+  openGroupDialog({
+    title: 'Mã mời',
+    cancelLabel: 'Đóng',
+    bodyHtml: `
+      <p>Gửi mã hoặc link này cho người muốn tham gia nhóm ${escapeHtml(group.name)}. Bạn vẫn phải duyệt từng yêu cầu.</p>
+      <label for="groupInviteCode">Mã nhóm</label>
+      <div class="group-copy-row">
+        <input id="groupInviteCode" class="group-code-value" type="text" readonly value="${escapeHtml(code)}" />
+        <button class="ghost-btn" type="button" data-copy-target="groupInviteCode" aria-label="Sao chép mã nhóm">Sao chép</button>
       </div>
-      <button class="ghost-btn" type="button" data-class-action="back-list">← Quay lại</button>
-    </div>
-    ${classMessageHtml()}
-    <form class="auth-form" data-class-form="join">
-      <label for="classCodeInput">Mã lớp (6 ký tự do giáo viên cung cấp)</label>
-      <input id="classCodeInput" name="code" type="text" placeholder="VD: A1B2C3" maxlength="8" style="text-transform:uppercase" value="${escapeHtml(prefill)}" required />
-      <button class="primary-btn" type="submit" ${classState.loading ? 'disabled' : ''}>Tham gia</button>
-    </form>
-  `;
-  classState.joinCodePrefill = '';
+      <label for="groupInviteLink">Link mời</label>
+      <div class="group-copy-row">
+        <input id="groupInviteLink" type="text" readonly value="${escapeHtml(groupInviteLink(code))}" />
+        <button class="ghost-btn" type="button" data-copy-target="groupInviteLink" aria-label="Sao chép link mời">Sao chép</button>
+      </div>
+      <div class="group-invite-regen">
+        <button class="ghost-btn" type="button" data-regen-code>Đổi mã mời</button>
+        <p class="group-hint">Đổi mã thì mã và link cũ không dùng được nữa.</p>
+      </div>
+    `,
+    onOpen: (api) => {
+      api.dialog.addEventListener('click', async (e) => {
+        const copyBtn = e.target.closest('[data-copy-target]');
+        if (copyBtn) {
+          const input = api.dialog.querySelector(`#${copyBtn.dataset.copyTarget}`);
+          const ok = await copyGroupText(input.value, input);
+          api.setMessage(ok ? 'Đã sao chép.' : 'Không sao chép được, hãy tự chọn và sao chép.', ok ? 'success' : 'error');
+          return;
+        }
+        const regenBtn = e.target.closest('[data-regen-code]');
+        if (!regenBtn) return;
+        regenBtn.disabled = true;
+        try {
+          const { data, error } = await supabase.rpc('regenerate_group_code', { p_class_id: group.class_id });
+          if (error) throw error;
+          code = data;
+          api.dialog.querySelector('#groupInviteCode').value = code;
+          api.dialog.querySelector('#groupInviteLink').value = groupInviteLink(code);
+          api.setMessage('Đã đổi mã mời. Mã cũ không dùng được nữa.', 'success');
+          const row = classState.groups.find((g) => g.class_id === group.class_id);
+          if (row) row.class_code = code;
+          if (classState.classDetail?.class_id === group.class_id) classState.classDetail.class_code = code;
+        } catch (err) {
+          api.setMessage(err.message || 'Không đổi được mã mời.');
+        } finally {
+          regenBtn.disabled = false;
+        }
+      });
+    },
+  });
 }
 
-async function handleCreateClassSubmit(form) {
-  const name = form.querySelector('#classNameInput')?.value?.trim();
-  const description = form.querySelector('#classDescInput')?.value?.trim();
-  const subjectSlug = form.querySelector('#classSubjectInput')?.value?.trim();
-  if (!name) {
-    classSetMessage('Vui lòng nhập tên lớp.', 'error');
-    renderClassCreateForm();
-    return;
-  }
-  classState.loading = true;
-  classSetMessage('');
-  renderClassCreateForm();
-  try {
-    const { data, error } = await supabase.rpc('create_class', {
-      p_name: name,
-      p_description: description || null,
-      p_subject_slug: subjectSlug || null,
+function openDeleteGroupDialog(group) {
+  if (group.has_running_quiz) {
+    openGroupDialog({
+      title: 'Xoá nhóm',
+      cancelLabel: 'Đóng',
+      bodyHtml: '<p>Nhóm đang có bài kiểm tra mở. Hãy kết thúc bài trước khi xoá nhóm.</p>',
     });
-    if (error) throw error;
-    classSetMessage(`Đã tạo lớp thành công! Mã lớp: ${data.class_code}`, 'success');
-    await loadMyClasses();
-    await openClassDetail(data.id);
-  } catch (err) {
-    classSetMessage(err.message || 'Không tạo được lớp.', 'error');
-    classState.loading = false;
-    renderClassCreateForm();
-  }
-}
-
-async function handleJoinClassSubmit(form) {
-  const code = form.querySelector('#classCodeInput')?.value?.trim();
-  if (!code) {
-    classSetMessage('Vui lòng nhập mã lớp.', 'error');
-    renderClassJoinForm();
     return;
   }
-  classState.loading = true;
-  classSetMessage('');
-  renderClassJoinForm();
-  try {
-    const { data, error } = await supabase.rpc('join_class_by_code', { p_code: code });
-    if (error) throw error;
-    classSetMessage(`Đã tham gia lớp "${data.name}".`, 'success');
-    await loadMyClasses();
-    await openClassDetail(data.id);
-  } catch (err) {
-    classSetMessage(err.message || 'Không tham gia được lớp. Kiểm tra lại mã lớp.', 'error');
-    classState.loading = false;
-    renderClassJoinForm();
-  }
+  openGroupDialog({
+    title: 'Xoá nhóm',
+    submitLabel: 'Xoá nhóm',
+    danger: true,
+    bodyHtml: `
+      <p><strong>Toàn bộ bài kiểm tra và kết quả sẽ bị xoá vĩnh viễn.</strong> Nên xuất CSV bảng kết quả trước khi xoá.</p>
+      <label for="groupDeleteConfirm">Gõ lại tên nhóm để xác nhận: ${escapeHtml(group.name)}</label>
+      <input id="groupDeleteConfirm" type="text" maxlength="80" autocomplete="off" />
+    `,
+    onOpen: (api) => {
+      const input = api.form.querySelector('#groupDeleteConfirm');
+      const sync = () => {
+        api.submitBtn.disabled = normalizeGroupName(input.value) !== normalizeGroupName(group.name);
+      };
+      input.addEventListener('input', sync);
+      sync();
+    },
+    onSubmit: async (api) => {
+      const { error } = await supabase.rpc('delete_group', {
+        p_class_id: group.class_id,
+        p_confirm_name: api.form.querySelector('#groupDeleteConfirm').value,
+      });
+      if (error) throw error;
+      classSetMessage(`Đã xoá nhóm ${group.name}.`, 'success');
+      classState.screen = 'list';
+      classState.classId = null;
+      classState.classDetail = null;
+      loadMyClasses();
+    },
+  });
 }
 
-// ---------- 2. Chi tiết lớp ---------------------------------------------------
+// ---------- 4. Trong nhóm ------------------------------------------------------
+
+async function fetchClassDetail(classId) {
+  const { data, error } = await supabase.rpc('get_class_detail', { p_class_id: classId });
+  if (error) throw error;
+  const detail = Array.isArray(data) ? data[0] : data;
+  if (!detail) throw new Error('Bạn không còn ở trong nhóm này.');
+  return detail;
+}
 
 async function openClassDetail(classId) {
+  const sameGroup = classState.classDetail?.class_id === classId;
   classState.classId = classId;
   classState.screen = 'detail';
   classState.loading = true;
-  classSetMessage('');
+  if (!sameGroup) {
+    classState.classDetail = null;
+    classState.quizzes = [];
+  }
   renderClassDetailScreen();
   try {
-    const [{ data: detail, error: detailError }, { data: quizzes, error: quizError }] = await Promise.all([
-      supabase.rpc('get_class_detail', { p_class_id: classId }),
+    const [detail, { data: quizzes, error: quizError }] = await Promise.all([
+      fetchClassDetail(classId),
       supabase.rpc('get_class_quizzes', { p_class_id: classId }),
     ]);
-    if (detailError) throw detailError;
     if (quizError) throw quizError;
-    classState.classDetail = Array.isArray(detail) ? detail[0] : detail;
+    classState.classDetail = detail;
     classState.quizzes = quizzes || [];
   } catch (err) {
-    classSetMessage(err.message || 'Không tải được thông tin lớp.', 'error');
+    classSetMessage(err.message || 'Không tải được thông tin nhóm.', 'error');
   } finally {
     classState.loading = false;
-    renderClassDetailScreen();
+    if (classState.screen === 'detail') renderClassDetailScreen();
   }
 }
 
 function renderClassDetailScreen() {
   const d = classState.classDetail;
-  if (!d && classState.loading) {
-    elements.classContent.innerHTML = `<p class="muted-text">Đang tải...</p>`;
-    return;
-  }
   if (!d) {
-    elements.classContent.innerHTML = `${classMessageHtml()}<button class="ghost-btn" type="button" data-class-action="back-list">← Quay lại danh sách lớp</button>`;
+    paintClassContent(`
+      <div class="group-head">
+        <button class="ghost-btn" type="button" data-class-action="back-list">← Danh sách nhóm</button>
+      </div>
+      ${classMessageHtml()}
+      ${classState.loading ? '<p class="muted-text">Đang tải...</p>' : ''}
+    `);
     return;
   }
-  const isAdmin = d.my_role === 'admin';
-  const joinUrl = `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(d.class_code)}`;
-
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Lớp học</p>
-        <h3>${escapeHtml(d.name)}</h3>
+  const manager = isGroupManager(d.my_role);
+  paintClassContent(`
+    <div class="group-head">
+      <button class="ghost-btn" type="button" data-class-action="back-list">← Danh sách nhóm</button>
+    </div>
+    <div class="group-head">
+      <div class="group-head-main">
+        <h2>${escapeHtml(d.name)}</h2>
+        ${d.description ? `<p class="group-row-meta">${escapeHtml(d.description)}</p>` : ''}
       </div>
-      <button class="ghost-btn" type="button" data-class-action="back-list">← Danh sách lớp</button>
+      ${manager ? `<div class="group-head-actions">${groupGearHtml(d.class_id, d.pending_count)}</div>` : ''}
     </div>
     ${classMessageHtml()}
-    <div class="about-card" style="margin-bottom:16px;">
-      ${d.description ? `<p class="muted-text">${escapeHtml(d.description)}</p>` : ''}
-      <p class="muted-text"><strong>Mã lớp:</strong> ${escapeHtml(d.class_code)} &nbsp;|&nbsp; <strong>Thành viên:</strong> ${Number(d.member_count || 0)} &nbsp;|&nbsp; <strong>Vai trò của bạn:</strong> ${isAdmin ? 'Quản trị' : 'Thành viên'}</p>
-      ${isAdmin ? `<p class="muted-text">Chia sẻ mã <strong>${escapeHtml(d.class_code)}</strong> hoặc link sau để mời thành viên:<br/><code style="word-break:break-all;">${escapeHtml(joinUrl)}</code></p>` : ''}
-      <div class="inline-actions">
-        ${isAdmin ? `<button class="ghost-btn" type="button" data-class-action="open-members">Quản lý thành viên</button>` : ''}
-        ${isAdmin ? `<button class="primary-btn" type="button" data-class-action="show-create-quiz">+ Tạo bài kiểm tra</button>` : ''}
-        ${!isAdmin ? `<button class="ghost-btn" type="button" data-class-action="leave-class">Rời lớp</button>` : ''}
-      </div>
-    </div>
+    <h3 class="group-section-title">Lịch sử</h3>
+    ${classState.quizzes.length === 0 && !classState.loading ? '<p class="muted-text">Nhóm chưa có bài kiểm tra nào.</p>' : ''}
+    ${classState.quizzes.length > 0 ? `<ul class="group-list">${classState.quizzes.map(groupQuizRowHtml).join('')}</ul>` : ''}
+  `);
+}
 
-    <div class="section-header">
-      <div><p class="eyebrow">Bài kiểm tra</p></div>
+function groupQuizRowHtml(q) {
+  return `
+    <li class="group-row">
+      <div class="group-row-main">
+        <div class="group-row-title"><span class="group-row-name">${escapeHtml(q.title)}</span></div>
+      </div>
+    </li>
+  `;
+}
+
+// ---------- 5. Thành viên (chủ nhóm, quản trị viên) ----------------------------
+
+async function openClassMembers(classId, returnTo = 'detail') {
+  classState.classId = classId;
+  classState.returnTo = returnTo;
+  classState.screen = 'members';
+  classState.loading = true;
+  renderClassMembersScreen();
+  try {
+    const [detail, membersRes, requestsRes] = await Promise.all([
+      fetchClassDetail(classId),
+      supabase.rpc('get_class_members', { p_class_id: classId }),
+      supabase.rpc('get_join_requests', { p_class_id: classId }),
+    ]);
+    if (membersRes.error) throw membersRes.error;
+    if (requestsRes.error) throw requestsRes.error;
+    classState.classDetail = detail;
+    classState.members = membersRes.data || [];
+    classState.joinRequests = requestsRes.data || [];
+  } catch (err) {
+    classSetMessage(err.message || 'Không tải được danh sách thành viên.', 'error');
+  } finally {
+    classState.loading = false;
+    if (classState.screen === 'members') renderClassMembersScreen();
+  }
+}
+
+// Bản 2 dòng cho điện thoại nằm sẵn trong ô Họ tên, CSS bật/tắt theo cỡ màn hình.
+function groupMemberCanAct(myRole, member) {
+  if (member.is_owner || member.user_id === currentUserId) return false;
+  if (myRole === 'owner') return true;
+  return myRole === 'admin' && member.role === 'member';
+}
+
+function renderClassMembersScreen() {
+  const d = classState.classDetail;
+  const requests = classState.joinRequests;
+  const members = classState.members;
+  const myRole = d?.my_role;
+
+  paintClassContent(`
+    <div class="group-head">
+      <button class="ghost-btn" type="button" data-class-action="back-from-sub">${classState.returnTo === 'list' ? '← Danh sách nhóm' : '← Quay lại nhóm'}</button>
     </div>
-    <div class="table-wrap">
-      ${classState.quizzes.length === 0 ? '<p class="muted-text">Lớp chưa có bài kiểm tra nào.</p>' : `
-        <table>
-          <thead>
-            <tr>
-              <th>Tên bài</th>
-              <th>Số câu</th>
-              <th>Thời gian</th>
-              ${isAdmin ? '<th>Đã nộp</th>' : '<th>Trạng thái</th>'}
-              <th></th>
-            </tr>
-          </thead>
+    <div class="group-head">
+      <h2>Thành viên${d ? ` - ${escapeHtml(d.name)}` : ''}</h2>
+    </div>
+    ${classMessageHtml()}
+    ${classState.loading && members.length === 0 ? '<p class="muted-text">Đang tải...</p>' : ''}
+
+    ${d ? `
+    <div class="group-section-head">
+      <h3 class="group-section-title">Yêu cầu tham gia (${requests.length})</h3>
+      ${requests.length > 1 ? '<button class="ghost-btn" type="button" data-class-action="approve-all">Duyệt tất cả</button>' : ''}
+    </div>
+    ${requests.length === 0 ? '<p class="muted-text">Không có yêu cầu nào đang chờ.</p>' : `
+      <div class="table-wrap">
+        <table class="group-table">
+          <thead><tr><th>Mã SV</th><th>Họ tên</th><th>Email</th><th>Thời điểm gửi</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
           <tbody>
-            ${classState.quizzes.map((q) => `
+            ${requests.map((r) => `
               <tr>
-                <td>${escapeHtml(q.title)}</td>
-                <td>${Number(q.question_count || 0)}</td>
-                <td>${q.time_limit_minutes ? escapeHtml(String(q.time_limit_minutes)) + ' phút' : 'Không giới hạn'}</td>
-                ${isAdmin
-                  ? `<td>${Number(q.submitted_count || 0)}/${Number(q.total_members || 0)}</td>`
-                  : `<td>${escapeHtml(classStatusLabel(q.my_status))}${q.my_best_percent != null ? ' - ' + Number(q.my_best_percent) + '%' : ''}</td>`
-                }
-                <td class="inline-actions">
-                  ${isAdmin ? `<button class="ghost-btn" type="button" data-class-action="view-results" data-quiz-id="${escapeHtml(q.quiz_id)}" data-quiz-title="${escapeHtml(q.title)}">Kết quả</button>` : ''}
-                  ${isAdmin ? `<button class="ghost-btn" type="button" data-class-action="delete-quiz" data-quiz-id="${escapeHtml(q.quiz_id)}">Xoá</button>` : ''}
-                  ${!isAdmin && q.my_status !== 'submitted' ? `<button class="primary-btn" type="button" data-class-action="take-quiz" data-quiz-id="${escapeHtml(q.quiz_id)}" data-quiz-title="${escapeHtml(q.title)}">${q.my_status === 'in_progress' ? 'Tiếp tục làm' : 'Làm bài'}</button>` : ''}
-                  ${!isAdmin && q.my_status === 'submitted' ? '<span class="muted-text">Đã nộp bài</span>' : ''}
+                <td class="group-col-wide">${escapeHtml(r.student_code || '-')}</td>
+                <td class="group-col-name">
+                  <span class="group-cell-name">${escapeHtml(r.full_name)}</span>
+                  <span class="group-cell-sub">${escapeHtml(r.student_code || '-')} · ${escapeHtml(r.email || '')} · ${escapeHtml(formatClassDate(r.requested_at))}</span>
+                </td>
+                <td class="group-col-wide">${escapeHtml(r.email || '')}</td>
+                <td class="group-col-wide">${escapeHtml(formatClassDate(r.requested_at))}</td>
+                <td class="group-col-actions">
+                  <div class="group-cell-actions">
+                    <button class="primary-btn" type="button" data-class-action="approve-request" data-user-id="${escapeHtml(r.user_id)}">Duyệt</button>
+                    <button class="ghost-btn" type="button" data-class-action="reject-request" data-user-id="${escapeHtml(r.user_id)}">Từ chối</button>
+                  </div>
                 </td>
               </tr>
             `).join('')}
           </tbody>
         </table>
-      `}
-    </div>
-  `;
-}
-
-async function handleLeaveClass() {
-  if (!classState.classId) return;
-  if (!window.confirm('Bạn có chắc muốn rời lớp này?')) return;
-  try {
-    const { error } = await supabase.rpc('leave_class', { p_class_id: classState.classId });
-    if (error) throw error;
-    classState.screen = 'list';
-    classSetMessage('Đã rời lớp.', 'success');
-    await loadMyClasses();
-  } catch (err) {
-    classSetMessage(err.message || 'Không rời được lớp.', 'error');
-    renderClassDetailScreen();
-  }
-}
-
-// ---------- 3. Quản lý thành viên (admin) ------------------------------------
-
-async function openClassMembers() {
-  classState.screen = 'members';
-  classState.loading = true;
-  renderClassMembersScreen();
-  try {
-    const { data, error } = await supabase.rpc('get_class_members', { p_class_id: classState.classId });
-    if (error) throw error;
-    classState.members = data || [];
-  } catch (err) {
-    classSetMessage(err.message || 'Không tải được danh sách thành viên.', 'error');
-  } finally {
-    classState.loading = false;
-    renderClassMembersScreen();
-  }
-}
-
-function renderClassMembersScreen() {
-  const d = classState.classDetail;
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Lớp học</p>
-        <h3>Thành viên - ${escapeHtml(d?.name || '')}</h3>
       </div>
-      <button class="ghost-btn" type="button" data-class-action="back-detail">← Quay lại lớp</button>
+    `}
+
+    <div class="group-section-head">
+      <h3 class="group-section-title">Thành viên (${members.length})</h3>
     </div>
-    ${classMessageHtml()}
-    ${classState.loading ? '<p class="muted-text">Đang tải...</p>' : ''}
     <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>Tên</th><th>Email</th><th>Vai trò</th><th>Tham gia</th><th></th></tr>
-        </thead>
+      <table class="group-table">
+        <thead><tr><th>Mã SV</th><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Ngày tham gia</th><th>Số bài đã nộp</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
         <tbody>
-          ${classState.members.map((m) => `
-            <tr>
-              <td>${escapeHtml(m.full_name)}</td>
-              <td>${escapeHtml(m.email || '')}</td>
-              <td>${m.role === 'admin' ? 'Quản trị' : 'Thành viên'}</td>
-              <td>${formatClassDate(m.joined_at)}</td>
-              <td class="inline-actions">
-                ${m.user_id !== d?.owner_id ? `
-                  <button class="ghost-btn" type="button" data-class-action="toggle-role" data-user-id="${escapeHtml(m.user_id)}" data-current-role="${escapeHtml(m.role)}">${m.role === 'admin' ? 'Hạ xuống thành viên' : 'Nâng làm quản trị'}</button>
-                  <button class="ghost-btn" type="button" data-class-action="remove-member" data-user-id="${escapeHtml(m.user_id)}">Xoá</button>
-                ` : '<span class="muted-text">Chủ lớp</span>'}
-              </td>
-            </tr>
-          `).join('')}
+          ${members.map((m) => {
+            const role = m.is_owner ? 'owner' : m.role;
+            const joined = m.joined_at ? new Date(m.joined_at).toLocaleDateString('vi-VN') : '';
+            const submitted = Number(m.submitted_count || 0);
+            return `
+              <tr>
+                <td class="group-col-wide">${escapeHtml(m.student_code || '-')}</td>
+                <td class="group-col-name">
+                  <span class="group-cell-name">${escapeHtml(m.full_name)}</span>
+                  <span class="group-cell-sub">${escapeHtml(m.student_code || '-')} · ${escapeHtml(groupRoleLabel(role))} · ${escapeHtml(m.email || '')} · ${escapeHtml(joined)} · ${submitted} bài đã nộp</span>
+                </td>
+                <td class="group-col-wide">${escapeHtml(m.email || '')}</td>
+                <td class="group-col-wide">${escapeHtml(groupRoleLabel(role))}</td>
+                <td class="group-col-wide">${escapeHtml(joined)}</td>
+                <td class="group-col-wide">${m.is_owner ? '-' : submitted}</td>
+                <td class="group-col-actions">
+                  ${groupMemberCanAct(myRole, m) ? `<button class="ghost-btn" type="button" data-class-action="member-menu" data-user-id="${escapeHtml(m.user_id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Thao tác với ${escapeHtml(m.full_name)}">Thao tác</button>` : ''}
+                </td>
+              </tr>
+            `;
+          }).join('')}
         </tbody>
       </table>
     </div>
-  `;
+    ` : ''}
+  `);
 }
 
-async function handleToggleMemberRole(userId, currentRole) {
-  const newRole = currentRole === 'admin' ? 'member' : 'admin';
+function openMemberMenu(anchor, userId) {
+  const member = classState.members.find((m) => m.user_id === userId);
+  if (!member) return;
+  const isOwner = classState.classDetail?.my_role === 'owner';
+  const items = [];
+  if (isOwner) {
+    const next = member.role === 'admin' ? 'member' : 'admin';
+    items.push({
+      label: next === 'admin' ? 'Đổi thành Quản trị viên' : 'Đổi thành Người tham gia',
+      run: () => handleChangeMemberRole(member, next),
+    });
+    items.push({ label: 'Chuyển quyền chủ nhóm', run: () => handleTransferOwnership(member) });
+  }
+  items.push({ label: 'Mời khỏi nhóm', danger: true, separatorBefore: isOwner, run: () => handleRemoveMember(member) });
+  openGroupMenu(anchor, `Thao tác với ${member.full_name}`, items);
+}
+
+async function handleRespondRequests(userIds, approve) {
+  try {
+    const { error } = await supabase.rpc('respond_join_request', {
+      p_class_id: classState.classId,
+      p_user_ids: userIds,
+      p_approve: approve,
+    });
+    if (error) throw error;
+    classSetMessage(approve ? 'Đã duyệt yêu cầu tham gia.' : 'Đã từ chối yêu cầu tham gia.', 'success');
+  } catch (err) {
+    classSetMessage(err.message || 'Không xử lý được yêu cầu.', 'error');
+  }
+  await openClassMembers(classState.classId, classState.returnTo);
+}
+
+async function handleChangeMemberRole(member, role) {
   try {
     const { error } = await supabase.rpc('update_class_member_role', {
-      p_class_id: classState.classId, p_user_id: userId, p_role: newRole,
+      p_class_id: classState.classId,
+      p_user_id: member.user_id,
+      p_role: role,
     });
     if (error) throw error;
-    await openClassMembers();
+    classSetMessage(`Đã đổi ${member.full_name} thành ${groupRoleLabel(role)}.`, 'success');
   } catch (err) {
     classSetMessage(err.message || 'Không đổi được vai trò.', 'error');
-    renderClassMembersScreen();
   }
+  await openClassMembers(classState.classId, classState.returnTo);
 }
 
-async function handleRemoveMember(userId) {
-  if (!window.confirm('Xoá thành viên này khỏi lớp?')) return;
+async function handleTransferOwnership(member) {
+  const ok = await groupConfirm({
+    title: 'Chuyển quyền chủ nhóm',
+    message: `Chuyển quyền chủ nhóm cho ${member.full_name}? Bạn sẽ trở thành Quản trị viên và không tự lấy lại được quyền này.`,
+    confirmLabel: 'Chuyển quyền',
+    danger: true,
+  });
+  if (!ok) return;
   try {
-    const { error } = await supabase.rpc('remove_class_member', {
-      p_class_id: classState.classId, p_user_id: userId,
+    const { error } = await supabase.rpc('transfer_group_ownership', {
+      p_class_id: classState.classId,
+      p_new_owner: member.user_id,
     });
     if (error) throw error;
-    await openClassMembers();
+    classSetMessage(`${member.full_name} đã là người tạo nhóm mới.`, 'success');
   } catch (err) {
-    classSetMessage(err.message || 'Không xoá được thành viên.', 'error');
-    renderClassMembersScreen();
+    classSetMessage(err.message || 'Không chuyển được quyền chủ nhóm.', 'error');
+  }
+  await openClassMembers(classState.classId, classState.returnTo);
+}
+
+async function handleRemoveMember(member) {
+  const ok = await groupConfirm({
+    title: 'Mời khỏi nhóm',
+    message: `Mời ${member.full_name} khỏi nhóm? Kết quả bài cũ của người này vẫn giữ trong bảng kết quả.`,
+    confirmLabel: 'Mời khỏi nhóm',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const { error } = await supabase.rpc('remove_class_member', {
+      p_class_id: classState.classId,
+      p_user_id: member.user_id,
+    });
+    if (error) throw error;
+    classSetMessage(`Đã mời ${member.full_name} khỏi nhóm.`, 'success');
+  } catch (err) {
+    classSetMessage(err.message || 'Không mời được thành viên khỏi nhóm.', 'error');
+  }
+  await openClassMembers(classState.classId, classState.returnTo);
+}
+
+// Quay lại từ màn thành viên / tạo bài: về đúng nơi đã mở.
+function groupBackFromSub() {
+  classSetMessage('');
+  if (classState.returnTo === 'list' || !classState.classId) {
+    classState.screen = 'list';
+    loadMyClasses();
+  } else {
+    openClassDetail(classState.classId);
   }
 }
 
 // ---------- 4. Tạo bài kiểm tra (admin) ---------------------------------------
 
-async function showCreateQuizForm() {
+async function showCreateQuizForm(classId, returnTo = 'detail') {
+  classState.classId = classId;
+  classState.returnTo = returnTo;
   classState.screen = 'createQuiz';
+  classState.classDetail = await fetchClassDetail(classId).catch(() => classState.classDetail);
   classState.lessonsForQuiz = [];
   renderCreateQuizForm();
   const subjectSlug = classState.classDetail?.subject_slug;
@@ -4084,19 +4759,16 @@ function wireClassEvents() {
 
     switch (action) {
       case 'show-create':
-        classState.screen = 'create';
-        classSetMessage('');
-        renderClassScreen();
+        openCreateGroupDialog();
         break;
       case 'show-join':
-        classState.screen = 'join';
-        classSetMessage('');
-        renderClassScreen();
+        openJoinDialog();
         break;
       case 'back-list':
         classState.screen = 'list';
+        classState.classDetail = null;
         classSetMessage('');
-        renderClassListScreen();
+        loadMyClasses();
         break;
       case 'back-detail':
         classSetMessage('');
@@ -4108,20 +4780,33 @@ function wireClassEvents() {
           loadMyClasses();
         }
         break;
+      case 'back-from-sub':
+        groupBackFromSub();
+        break;
       case 'open-class':
+        classSetMessage('');
         openClassDetail(btn.dataset.classId);
         break;
-      case 'open-members':
-        openClassMembers();
+      case 'group-menu':
+        openGroupManageMenu(btn, btn.dataset.classId);
         break;
-      case 'show-create-quiz':
-        showCreateQuizForm();
+      case 'cancel-request':
+        handleCancelJoinRequest(btn.dataset.classId);
         break;
-      case 'toggle-role':
-        handleToggleMemberRole(btn.dataset.userId, btn.dataset.currentRole);
+      case 'leave-group':
+        handleLeaveClass(btn.dataset.classId);
         break;
-      case 'remove-member':
-        handleRemoveMember(btn.dataset.userId);
+      case 'approve-request':
+        handleRespondRequests([btn.dataset.userId], true);
+        break;
+      case 'reject-request':
+        handleRespondRequests([btn.dataset.userId], false);
+        break;
+      case 'approve-all':
+        handleRespondRequests(classState.joinRequests.map((r) => r.user_id), true);
+        break;
+      case 'member-menu':
+        openMemberMenu(btn, btn.dataset.userId);
         break;
       case 'delete-quiz':
         handleDeleteQuiz(btn.dataset.quizId);
@@ -4144,9 +4829,6 @@ function wireClassEvents() {
       case 'quiz-submit':
         submitTakeQuiz(false);
         break;
-      case 'leave-class':
-        handleLeaveClass();
-        break;
       default:
         break;
     }
@@ -4162,9 +4844,7 @@ function wireClassEvents() {
     if (!form) return;
     e.preventDefault();
     const type = form.dataset.classForm;
-    if (type === 'create') handleCreateClassSubmit(form);
-    else if (type === 'join') handleJoinClassSubmit(form);
-    else if (type === 'createQuiz') handleCreateQuizSubmit(form);
+    if (type === 'createQuiz') handleCreateQuizSubmit(form);
   });
 }
 
@@ -4238,6 +4918,23 @@ function wireEvents() {
     }
 
 
+  if (elements.editStudentCodeBtn) {
+    elements.editStudentCodeBtn.addEventListener('click', openEditStudentCode);
+  }
+  if (elements.saveStudentCodeBtn) {
+    elements.saveStudentCodeBtn.addEventListener('click', saveStudentCode);
+  }
+  if (elements.cancelStudentCodeBtn) {
+    elements.cancelStudentCodeBtn.addEventListener('click', cancelEditStudentCode);
+  }
+  if (elements.studentCodeInput) {
+    elements.studentCodeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveStudentCode();
+      }
+    });
+  }
   if (elements.editNameBtn) {
     elements.editNameBtn.addEventListener('click', openEditName);
   }
@@ -4490,6 +5187,7 @@ if (!configError) {
       updateRetryWrongButton();
 
       setView('home');
+      if (!authSubmitRunning) openPendingJoinLink();
     } else {
       clearQuizState();
       setView('auth');
@@ -4499,16 +5197,14 @@ if (!configError) {
 
 await checkSession();
 
-// Link mời vào lớp dạng ...?join=MACODE: nếu đã đăng nhập, tự mở sẵn form
-// tham gia lớp kèm mã (điền sẵn, không tự động nộp - vẫn cần người dùng
-// bấm "Tham gia" để xác nhận).
+// Link mời vào nhóm dạng ...?join=MACODE: mở sẵn hộp thoại tham gia với mã điền sẵn (vẫn cần
+// người dùng bấm gửi). Chưa đăng nhập thì giữ mã lại, đăng nhập xong mới mở.
 try {
   const joinCode = new URLSearchParams(window.location.search).get('join');
-  if (joinCode && currentUserId) {
-    classState.joinCodePrefill = joinCode.toUpperCase();
-    classState.screen = 'join';
-    navigateTo('classes');
+  if (joinCode) {
+    classState.joinCodePrefill = joinCode.trim().toUpperCase();
     window.history.replaceState({}, '', window.location.pathname);
+    openPendingJoinLink();
   }
 } catch {
   // bỏ qua nếu trình duyệt không hỗ trợ URLSearchParams
