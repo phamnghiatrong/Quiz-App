@@ -1008,7 +1008,7 @@ function showEnglishTab(tabId) {
 // này lần đầu (không làm chậm lúc vào app). Tiến độ học lưu theo từng tài
 // khoản nên truyền currentUserId; đổi tài khoản thì module tự dựng lại.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa file trong thư mục tenses/.
-const TENSES_MODULE_URL = './tenses/tenses.js?v=20260930-3';
+const TENSES_MODULE_URL = './tenses/tenses.js?v=20261104-1';
 let tensesModulePromise = null;
 
 async function openTenses() {
@@ -1035,7 +1035,7 @@ async function openTenses() {
 // giống mục 12 thì. Tiến độ thẻ YCT lưu theo tài khoản (currentUserId); từ tự
 // tra ("Sổ từ của tôi") lưu ở bảng vocab_words nên truyền client supabase.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa chinese.js / chinese-data.js / chinese.css.
-const CHINESE_MODULE_URL = './chinese/chinese.js?v=20261004-3';
+const CHINESE_MODULE_URL = './chinese/chinese.js?v=20261104-1';
 let chineseModulePromise = null;
 
 async function openChinese() {
@@ -1063,7 +1063,7 @@ async function openChinese() {
 // Sổ từ lưu ở bảng Supabase vocab_words (cần chạy vocab/vocab-schema.sql) nên
 // truyền client supabase cho module. Nạp lười giống mục 12 thì / Tiếng Trung.
 // Nhớ tăng ?v= bên dưới mỗi khi sửa vocab.js / vocab-api.js / vocab.css.
-const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261004-8';
+const VOCAB_MODULE_URL = './vocab/vocab.js?v=20261104-1';
 let vocabModulePromise = null;
 
 async function openVocab() {
@@ -1090,7 +1090,7 @@ async function openVocab() {
 // Ô tra từ bên phải màn làm bài, chỉ hiện với các môn tiếng Anh (slug "tieng-anh..."):
 // vocab/vocab-mini.js (nạp lười). Bấm đúp vào một từ trong câu hỏi để tra nhanh.
 // Nhớ tăng ?v= khi sửa vocab-mini.js / vocab-api.js.
-const VOCAB_MINI_URL = './vocab/vocab-mini.js?v=20261005-m5';
+const VOCAB_MINI_URL = './vocab/vocab-mini.js?v=20261104-1';
 let quizLookupMini = null;
 
 function isEnglishSubject(slug) {
@@ -1352,6 +1352,12 @@ function setupMainNav() {
       return;
     }
 
+    // Chọn bằng bàn phím (detail = 0): mục vừa chọn sắp bị ẩn, trả focus về chỗ hợp lý
+    // để lần nhấn Tab tiếp theo không quay lại từ đầu trang.
+    const returnFocusTo = elements.siteHeader.classList.contains('is-compact')
+      ? elements.navToggle
+      : button.closest('.has-sub')?.querySelector('[data-nav-branch]');
+
     closeNavMenus();
     if (button.dataset.navAction === 'logout') {
       handleLogout();
@@ -1359,6 +1365,7 @@ function setupMainNav() {
     }
     if (button.dataset.navView) {
       navigateTo(button.dataset.navView, { slug: button.dataset.navSlug });
+      if (event.detail === 0) returnFocusTo?.focus();
     }
   });
 

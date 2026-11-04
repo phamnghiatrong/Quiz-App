@@ -174,6 +174,7 @@ body .app-shell > header.app-brand-plain[hidden] {
   z-index: 110;
   min-width: 13.5rem;
   max-height: calc(100vh - var(--site-header-h) - 1rem);
+  max-height: calc(100dvh - var(--site-header-h) - 1rem);
   overflow-y: auto;
   padding: 0.35rem;
   display: grid;
@@ -285,7 +286,9 @@ body .app-shell > header.app-brand-plain[hidden] {
   right: 0;
   margin: 0;
   padding: 0.5rem clamp(14px, 2.5vw, 28px) 0.75rem;
+  /* dvh: trên điện thoại 100vh tính cả thanh địa chỉ, mục cuối sẽ bị che */
   max-height: calc(100vh - var(--site-header-h));
+  max-height: calc(100dvh - var(--site-header-h));
   overflow-y: auto;
   background: var(--nav-bg);
   border-bottom: 1px solid var(--nav-line);

@@ -5,16 +5,20 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 
 | File | Vai trò |
 |------|---------|
-| `index.html` | Trang chính (đăng nhập, chọn môn, làm bài, lịch sử, BXH) |
+| `index.html` | Trang chính (đăng nhập, menu, làm bài, lịch sử, BXH) |
 | `app.js` | Toàn bộ logic ứng dụng (ES module) |
+| `settings.js` | Mục Tùy chỉnh: giao diện, cỡ chữ, font |
 | `config.js` | Supabase URL + publishable key |
 | `style.css` | Giao diện nền |
 | `style-final-fix.css` | Lớp ghi đè giao diện, nạp sau `style.css` |
+| `theme.css` | Biến màu của giao diện sáng/tối, cỡ chữ, font. Biến `--app-*` dùng chung cho cả 3 mục con trong Shadow DOM |
+| `menu.css` | Menu ngang, hero Trang chủ, Bài đang làm dở, tab Tiếng Anh, Tùy chỉnh |
 | `reset-password.html` / `reset-password.js` | Trang đặt lại mật khẩu từ email |
 | `sw.js` | Service worker (PWA, cache offline) |
 | `manifest.webmanifest` | Khai báo PWA (tên, icon, theme) |
 | `vercel.json` | Rewrite `/reset-password`, header cache |
 | `schema.sql` | Toàn bộ schema + RLS + RPC của Supabase |
+| `migrations/` | Thay đổi SQL cho project đã có dữ liệu, chạy riêng trong SQL Editor |
 | `public/favicon.png` | Icon ứng dụng (512x512) |
 | `public/2.png` | Ảnh chữ thương hiệu trên header |
 | `package.json` | Khai báo project tĩnh, không có dependency |
@@ -25,12 +29,14 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 ## Tính năng
 
 - Đăng ký / đăng nhập / đăng xuất, đổi tên hiển thị, đổi mật khẩu, quên mật khẩu
-- Chọn môn học, lọc theo bài/phần
+- Menu ngang trên cùng, trên điện thoại gom vào nút Menu. Chọn môn ngay trên menu, lọc theo bài/phần
 - Luyện tập (không giới hạn thời gian) và thi thử 30 câu/20 phút hoặc 70 câu/60 phút
 - Hiện đúng/sai ngay khi chọn đáp án, kèm giải thích nếu câu hỏi có cột `explanation`
 - Tự lưu bài đang làm dở theo từng tài khoản + từng môn, cho phép tạm dừng và làm tiếp
-- Làm lại các câu sai gần nhất
-- Lịch sử ôn tập và bảng xếp hạng cá nhân
+  (Trang chủ có khối "Bài đang làm dở" liệt kê bài của mọi môn)
+- Làm lại các câu sai gần nhất (không tính giờ, không tính điểm BXH)
+- Lịch sử ôn tập và bảng xếp hạng theo từng môn
+- Tùy chỉnh: giao diện Sáng / Tối / Theo hệ thống, cỡ chữ, font chữ
 - Cài được như app (PWA), dùng lại được khi mất mạng
 - **Lớp học (kiểm tra theo lớp)**: tạo lớp, mời thành viên bằng mã lớp/link,
   giáo viên tạo bài kiểm tra từ ngân hàng câu hỏi, học sinh làm bài (đáp án
@@ -73,7 +79,7 @@ lại từ mặt sau thẻ, hình cắt từ mặt trước (WebP 320px, tổng 
 
 ## Lớp học (kiểm tra theo lớp)
 
-Vào sidebar **"Lớp học"** sau khi đăng nhập.
+Vào mục **Lớp học** trên menu sau khi đăng nhập.
 
 - **Giáo viên/người tạo lớp** (vai trò `admin`): tạo lớp → nhận mã lớp 6 ký
   tự + link mời (`?join=MÃ`) → quản lý thành viên (nâng/hạ quyền quản trị,
@@ -105,8 +111,20 @@ chủ đích, dự kiến bổ sung ở Phase 2/3):
 ## Ghi chú kỹ thuật
 
 - **Cách tính điểm bảng xếp hạng**: đang cộng dồn số câu đúng của tất cả các lượt
-  (`sum`). Muốn đổi sang "điểm cao nhất của một lượt" hoặc chỉ tính bài thi thử,
+  thi thử (`sum`). Muốn đổi sang "điểm cao nhất của một lượt" hoặc tính cả luyện tập,
   xem phần 3.4 trong `schema.sql` - đã ghi sẵn hướng dẫn.
+- **Xếp hạng**: mỗi người một hạng riêng (`row_number`). Bằng điểm thì ai ít lượt thi
+  hơn xếp trên. Project đang chạy cần chạy `migrations/2026-11-leaderboard-unique-rank.sql`.
+- **Menu**: đầu `app.js` có `MENU_HIDDEN_SUBJECTS` (môn tạm ẩn khỏi menu) và
+  `MENU_SUBJECT_ORDER` (thứ tự môn). Thêm môn mới trên Supabase thì menu tự cập nhật,
+  môn chưa có trong danh sách thứ tự được xếp cuối.
+- **Video Trang chủ**: đầu `app.js` có `HOME_HERO_VIDEO_URL` và `HOME_HERO_POSTER_URL`.
+  Để trống hoặc người dùng bật "giảm chuyển động" thì hiện nền gradient / poster.
+  Nên nén video dưới khoảng 5 MB, 720p, H.264/MP4 hoặc WebM.
+- **Tùy chỉnh**: lưu ở `localStorage` khóa `quizapp-settings-v1`. Đoạn script đầu
+  `<head>` trong `index.html` áp dụng trước khi trang hiện để không bị nháy sáng/tối.
+  Đổi màu thì sửa `theme.css`, cả khối sáng lẫn tối. CSS đã dùng `rem` cho `font-size`,
+  CSS mới cũng phải dùng `rem` thì mới scale theo cỡ chữ.
 - **Lịch sử làm bài**: `app.js` truy vấn `quiz_attempts` không kèm bộ lọc
   `user_id`, việc mỗi người chỉ thấy lịch sử của mình phụ thuộc hoàn toàn vào
   policy RLS. Đừng tắt RLS trên bảng này.
@@ -117,7 +135,10 @@ chủ đích, dự kiến bổ sung ở Phase 2/3):
   `is_class_member()` (SECURITY DEFINER) dùng trong policy thay vì subquery
   thô. Nếu sau này sửa policy 2 bảng này, giữ nguyên cách dùng hàm để tránh
   lỗi tái diễn.
-- **Cache**: `style-final-fix.css` và `app.js` được nạp kèm tham số `?v=...`
-  trong `index.html`. Sau mỗi lần sửa 2 file đó, nhớ tăng số phiên bản này,
-  nếu không trình duyệt cũ sẽ dùng lại bản cũ.
+- **Cache**: các file CSS và `app.js` được nạp kèm tham số `?v=...` trong
+  `index.html`. Sau mỗi lần sửa, nhớ tăng số phiên bản này, nếu không trình duyệt
+  cũ sẽ dùng lại bản cũ. Sửa file trong `tenses/`, `vocab/`, `chinese/` thì tăng
+  `TENSES_MODULE_URL` / `VOCAB_MODULE_URL` / `VOCAB_MINI_URL` / `CHINESE_MODULE_URL`
+  trong `app.js`. Đổi danh sách file của app thì sửa `APP_SHELL` và tăng `CACHE_NAME`
+  trong `sw.js`.
 - **Icon**: dùng chung `public/favicon.png` (512x512) cho mọi kích thước.

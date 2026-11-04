@@ -75,8 +75,8 @@
         apply(read());
       })();
     </script>
-    <link rel="stylesheet" href="./style.css" />
-    <link rel="stylesheet" href="./style-final-fix.css?v=20261005-1" />
+    <link rel="stylesheet" href="./style.css?v=20261104-1" />
+    <link rel="stylesheet" href="./style-final-fix.css?v=20261104-1" />
     <link rel="stylesheet" href="./theme.css?v=20261104-1" />
     <link rel="stylesheet" href="./menu.css?v=20261104-1" />
     <style>
@@ -546,7 +546,7 @@
                                     <p class="muted-text">
                     Ứng dụng hướng đến sự đơn giản, dễ sử dụng và hiệu quả thực tế, giúp việc ôn tập trở nên nhẹ nhàng hơn nhưng vẫn đảm bảo tính nghiêm túc trong học tập.
                   </p>
-                  <p class="muted-text"><strong>Phiên bản 4.5</strong> cập nhật ngày 04/10/2026</p>
+                  <p class="muted-text"><strong>Phiên bản 5.0</strong> cập nhật ngày 04/11/2026</p>
                 </section>
               </div>
 
@@ -556,6 +556,25 @@
           <h3>Thông tin nâng cấp</h3>
 
           <div class="changelog-list">
+                    <details class="changelog-item">
+                      <summary><strong>Phiên bản 5.0</strong>&nbsp;- Cập nhật ngày: 04/11/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Menu mới nằm ngang trên cùng thay cho thanh bên trái: Trang chủ, Môn học, Bảng xếp hạng, Lớp học, Học ngoại ngữ, Thông tin, Tài khoản, Tùy chỉnh. Trên điện thoại các mục gom vào nút Menu.</li>
+                          <li>Trang chủ mới có khung giới thiệu và mục "Bài đang làm dở" để tiếp tục bài của mọi môn. Chọn môn ngay trên menu, không cần bước xác nhận.</li>
+                          <li>Bảng xếp hạng xem theo từng môn. Mỗi người một hạng riêng, bằng điểm thì ai ít lượt thi hơn xếp trên.</li>
+                          <li>Học ngoại ngữ: Tiếng Anh gộp 12 thì và Từ vựng thành một trang có 2 tab, Tiếng Trung giữ nguyên.</li>
+                          <li>Thêm mục Tùy chỉnh: giao diện Sáng, Tối hoặc Theo hệ thống, cỡ chữ và font chữ.</li>
+                          <li>Sửa lỗi chọn môn trên điện thoại nhưng danh sách bài hiện lẫn bài của môn khác.</li>
+                          <li>Sửa lỗi nộp bài bị ghi 2 dòng trong lịch sử.</li>
+                          <li>"Làm lại câu sai" không còn tính giờ.</li>
+                          <li>Khi chọn đáp án, ô đáp án đúng và sai có màu rõ ràng.</li>
+                          <li>Lịch sử ôn tập có thêm cột môn học, chế độ làm bài ghi bằng tiếng Việt. Danh sách lớp hiện tên môn.</li>
+                        </ul>
+                      </div>
+                    </details>
+
                     <details class="changelog-item">
                       <summary><strong>Phiên bản 4.5</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
                       <div class="changelog-content">
@@ -680,7 +699,7 @@
         <div id="englishTabs" class="english-tabs" role="tablist" aria-label="Học tiếng Anh" hidden></div>
 
         <!-- Mục "12 thì tiếng Anh": nội dung do tenses/tenses.js dựng (nạp khi mở lần đầu) -->
-        <div id="tensesView" class="tenses-view" hidden>
+        <div id="tensesView" class="tenses-view" role="tabpanel" aria-labelledby="englishTab-tenses" hidden>
           <section class="panel tenses-head">
             <p class="eyebrow">12 thì tiếng Anh</p>
             <nav id="tensesNav" class="tenses-subnav" aria-label="Các phần của 12 thì tiếng Anh"></nav>
@@ -704,7 +723,7 @@
 
         <!-- Mục "Từ vựng tiếng Anh" (tra từ, ôn thẻ, đặt câu): nội dung do vocab/vocab.js dựng.
              Dùng chung class khung với mục 12 thì. -->
-        <div id="vocabView" class="tenses-view" hidden>
+        <div id="vocabView" class="tenses-view" role="tabpanel" aria-labelledby="englishTab-vocab" hidden>
           <section class="panel tenses-head">
             <p class="eyebrow">Từ vựng tiếng Anh</p>
             <nav id="vocabNav" class="tenses-subnav" aria-label="Các phần của mục Từ vựng tiếng Anh"></nav>
@@ -730,14 +749,14 @@
               </footer>
 
       <footer id="versionFooter" class="app-footer" hidden aria-label="Phiên bản ứng dụng">
-        <p class="muted-text"><strong>Phiên bản 4.5</strong> cập nhật ngày 04/10/2026</p>
+        <p class="muted-text"><strong>Phiên bản 5.0</strong> cập nhật ngày 04/11/2026</p>
       </footer>
 
         </div>
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20261009-1"></script>
+    <script type="module" src="./app.js?v=20261104-1"></script>
 
   </body>
 </html>
