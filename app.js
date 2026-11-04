@@ -30,6 +30,13 @@ const supabase = configError
         storage: window.localStorage,
       },
     });
+// Khung hero ở Trang chủ. Để trống URL = chưa có video, hiện nền gradient (hoặc poster).
+// Video nên nén nhỏ: dưới khoảng 5 MB, 720p, H.264/MP4 hoặc WebM, vì nhiều người mở bằng 4G.
+const HOME_HERO_VIDEO_URL = '';
+const HOME_HERO_POSTER_URL = '';
+const HOME_HERO_TITLE = 'Quiz App - Ôn tập trắc nghiệm';
+const HOME_HERO_TEXT = 'Luyện tập, thi thử và theo dõi tiến bộ của bạn ở từng môn học.';
+
 const LEGACY_QUIZ_DRAFT_KEY = 'politics_quiz_draft';
 const QUIZ_DRAFT_PREFIX = 'quiz-progress';
 
@@ -143,12 +150,11 @@ const elements = {
     feedbackInput: document.getElementById('feedbackInput'),
   sendFeedbackBtn: document.getElementById('sendFeedbackBtn'),
 
-  // New: Home view cards
-  subjectSelectionCard: null,
+  // Dựng trong setupHomeViewLayout()
+  homeHero: null,
+  resumeCard: null,
   quizStartCard: null,
   selectedSubjectTitle: null,
-  changeSubjectBtn: null,
-  confirmSubjectBtn: null,
   announcementCard: null,
   reviewCard: null,
 };
@@ -202,6 +208,10 @@ let selectedLesson = 'all';
 let questionLessons = [];
 let lessonsLoading = false;
 let lessonsError = '';
+// Chỉ nhận kết quả của lần gọi get_lessons mới nhất (xem loadLessons).
+let lessonsRequestId = 0;
+// Tăng khi rời màn làm bài: lượt tải câu hỏi đang chờ về muộn sẽ bị bỏ.
+let quizLoadToken = 0;
 
 // New: Subjects state
 const FALLBACK_SUBJECTS = [
@@ -213,6 +223,7 @@ const FALLBACK_SUBJECTS = [
     { id: 'ky-nang-mem-id', name: 'Kỹ Năng Mềm', slug: 'ky-nang-mem' },
     { id: 'mang-cap-quang-id', name: 'Mạng Cáp Quang', slug: 'mang-cap-quang' },
     { id: 'gdqp-an-id', name: 'GDQP&AN', slug: 'gdqp-an' },
+    { id: 'tieng-anh-chuyen-nganh-tt-mmt-id', name: 'Tiếng Anh chuyên ngành (TT&MMT)', slug: 'tieng-anh-chuyen-nganh-tt-mmt' },
 ];
 let availableSubjects = [];
 
@@ -820,17 +831,20 @@ function setView(viewKey) {
       setDashboardContainerMode('home');
       showSection('dashboard');
       if (elements.homeView) elements.homeView.hidden = false;
-      loadSubjects(); // New: Load subjects for home view
-      if (confirmedSubjectSlug) {
-        loadLessons();
-      }
-      syncPausedQuizButtons();
+      loadSubjects();
+      renderHomeResumeCard();
       break;
 
     case 'subject':
+      if (!confirmedSubjectSlug) {
+        setView('home');
+        return;
+      }
       setDashboardContainerMode('home');
       showSection('dashboard');
       if (elements.subjectView) elements.subjectView.hidden = false;
+      updateSubjectViewTitle();
+      syncPausedQuizButtons();
       break;
 
     case 'account':
@@ -911,6 +925,7 @@ function setView(viewKey) {
   }
 
   syncNavActiveState();
+  syncHomeHeroPlayback();
 }
 
 
@@ -1316,13 +1331,52 @@ function setupMainNav() {
   document.fonts?.ready?.then(syncNavCompact);
 }
 
+// Rời màn làm bài: lưu bài vào localStorage rồi xoá khỏi bộ nhớ. Bắt buộc phải xoá, vì
+// saveDraft() ghi theo confirmedSubjectSlug: nếu câu hỏi của môn A còn trong bộ nhớ mà
+// người dùng đã mở môn B, chuyển tab sẽ lưu nhầm bài môn A thành bài dở của môn B.
+function leaveQuizIfActive() {
+  quizLoadToken += 1;
+  isLoading = false;
+  if (!questions.length) return;
+  pauseQuiz();
+  clearQuizState();
+}
+
 // Điều hướng từ menu: đang làm bài thì tự lưu rồi mới chuyển trang, không hỏi lại.
 function navigateTo(navKey, params = {}) {
-  if (isQuizVisible() && questions.length) {
-    pauseQuiz();
+  leaveQuizIfActive();
+
+  if (navKey === 'subject') {
+    openSubject(params.slug);
+  } else {
+    setView(navKey);
   }
 
-  setView(navKey);
+  window.scrollTo({ top: 0 });
+}
+
+// Mở màn môn học (chọn bài/phần, luyện tập, thi thử).
+function openSubject(slug) {
+  const subjectSlug = String(slug || '').trim();
+  if (!subjectSlug) return;
+
+  leaveQuizIfActive();
+
+  selectedSubjectSlug = subjectSlug;
+  confirmedSubjectSlug = subjectSlug;
+  selectedLesson = 'all';
+  selectedExamType = null;
+  elements.modeCards?.forEach((card) => card.classList.remove('selected'));
+  localStorage.setItem('selectedSubjectSlug', subjectSlug);
+
+  loadLessons(subjectSlug);
+  setView('subject');
+}
+
+// Nút Tiếp tục ở khối "Bài đang làm dở": đưa vào đúng môn rồi mở lại bài.
+function resumeDraftForSubject(slug) {
+  openSubject(slug);
+  continuePausedQuiz();
   window.scrollTo({ top: 0 });
 }
 
@@ -1417,43 +1471,38 @@ async function ensureProfileForSession(session) {
 
 
 
-async function loadLessons() {
+async function loadLessons(slug) {
   if (!elements.lessonSelect) return;
   if (configError) return;
+
+  const subjectSlug = String(slug || '').trim();
+  const requestId = ++lessonsRequestId;
+
+  // Không bao giờ gọi khi chưa có môn: get_lessons(null) trả về bài của TẤT CẢ các môn.
+  if (!subjectSlug) {
+    questionLessons = [];
+    elements.lessonSelect.innerHTML = '';
+    return;
+  }
 
   lessonsLoading = true;
   lessonsError = '';
 
+  // Xoá ngay danh sách của môn trước để không chọn nhầm bài của môn khác trong lúc chờ.
+  questionLessons = [];
+  elements.lessonSelect.innerHTML = '<option value="all">Đang tải...</option>';
+  elements.lessonSelect.value = 'all';
+  elements.lessonSelect.disabled = true;
+
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session?.user) {
-      questionLessons = [];
-      elements.lessonSelect.innerHTML = '';
-      lessonsLoading = false;
-      return;
-    }
+    const { data, error } = await supabase.rpc('get_lessons', { p_subject_slug: subjectSlug });
 
-    const { data, error } = await supabase.rpc('get_lessons', { p_subject_slug: confirmedSubjectSlug }); // Updated RPC call
-    if (error) {
-      console.error('[loadLessons] rpc error:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
-            lessonsError = error.message || 'Không thể tải danh sách bài/phần.';
-      questionLessons = [];
-      elements.lessonSelect.innerHTML = '<option value="all">Tất cả bài/phần</option>';
-      elements.lessonSelect.value = 'all';
-      selectedLesson = 'all';
-      setStatus('Không thể tải danh sách bài/phần: ' + lessonsError, 'error');
-      return;
+    // Người dùng đã chọn môn khác trong lúc chờ: bỏ kết quả về muộn này.
+    if (requestId !== lessonsRequestId) return;
 
-    }
+    if (error) throw error;
 
     questionLessons = Array.isArray(data) ? data : [];
-
-    const current = elements.lessonSelect.value || selectedLesson || 'all';
 
     const options = [
       { value: 'all', label: 'Tất cả bài/phần' },
@@ -1467,30 +1516,27 @@ async function loadLessons() {
       .map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
       .join('');
 
-    if (options.some((o) => o.value === current)) {
-      elements.lessonSelect.value = current;
-    } else {
-      elements.lessonSelect.value = 'all';
-    }
-
+    elements.lessonSelect.value = options.some((o) => o.value === selectedLesson) ? selectedLesson : 'all';
     selectedLesson = elements.lessonSelect.value || 'all';
   } catch (error) {
-    console.error('[loadLessons] unexpected error:', {
+    if (requestId !== lessonsRequestId) return;
+    console.error('[loadLessons] Không tải được danh sách bài/phần:', {
       message: error?.message,
       code: error?.code,
       details: error?.details,
       hint: error?.hint,
     });
-        lessonsError = error?.message || 'Không thể tải danh sách bài/phần.';
+    lessonsError = error?.message || 'Không thể tải danh sách bài/phần.';
     questionLessons = [];
     elements.lessonSelect.innerHTML = '<option value="all">Tất cả bài/phần</option>';
     elements.lessonSelect.value = 'all';
     selectedLesson = 'all';
     setStatus('Không thể tải danh sách bài/phần: ' + lessonsError, 'error');
-
-  
   } finally {
-    lessonsLoading = false;
+    if (requestId === lessonsRequestId) {
+      lessonsLoading = false;
+      elements.lessonSelect.disabled = false;
+    }
   }
 }
 
@@ -1500,33 +1546,44 @@ function setupHomeViewLayout() {
   elements.homeView.innerHTML = ''; // Clear existing content
   elements.homeView.className = 'home-content-grid'; // Apply grid for home view
 
-  // Subject Selection Card (main content)
-  const subjectSelectionCard = document.createElement('div');
-  subjectSelectionCard.className = 'panel hero-card';
-  subjectSelectionCard.innerHTML = `
-      <h2 class="subject-page-title">Môn học</h2>
-      <p class="muted-text">Chọn môn học bạn muốn ôn tập hoặc thi thử.</p>
-      <div class="subject-grid-final"></div>
-      <div class="action-button-row">
-          <button id="confirmSubjectBtn" class="primary-btn" type="button" disabled>Xác nhận chọn môn</button>
+  // Khung hero (video nền hoặc gradient)
+  const homeHero = document.createElement('section');
+  homeHero.className = 'home-hero';
+  if (HOME_HERO_POSTER_URL) {
+    homeHero.style.setProperty('--hero-poster', `url("${encodeURI(HOME_HERO_POSTER_URL)}")`);
+  }
+  homeHero.innerHTML = `
+      <div class="home-hero-overlay" aria-hidden="true"></div>
+      <div class="home-hero-content">
+        <h1>${escapeHtml(HOME_HERO_TITLE)}</h1>
+        <p>${escapeHtml(HOME_HERO_TEXT)}</p>
       </div>
   `;
-  elements.homeView.appendChild(subjectSelectionCard);
-  elements.subjectSelectionCard = subjectSelectionCard;
-  elements.subjectGrid = subjectSelectionCard.querySelector('.subject-grid-final');
-  elements.confirmSubjectBtn = subjectSelectionCard.querySelector('#confirmSubjectBtn');
+  elements.homeView.appendChild(homeHero);
+  elements.homeHero = homeHero;
+  syncHomeHeroVideo();
+  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', syncHomeHeroVideo);
+
+  // Bài đang làm dở
+  const resumeCard = document.createElement('div');
+  resumeCard.className = 'panel info-card resume-card';
+  resumeCard.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-resume-slug]');
+    if (button) resumeDraftForSubject(button.dataset.resumeSlug);
+  });
+  elements.homeView.appendChild(resumeCard);
+  elements.resumeCard = resumeCard;
+  renderHomeResumeCard();
 
   // Quiz Start Card
   const quizStartCard = document.createElement('div');
   quizStartCard.className = 'panel hero-card';
-  quizStartCard.hidden = true; // Ẩn mặc định khi chưa xác nhận môn học
   quizStartCard.innerHTML = `
       <div class="section-header" style="margin-bottom: 16px;">
         <div>
           <p class="eyebrow">LÀM BÀI</p>
           <h2 id="selectedSubjectTitle">Bắt đầu ôn tập</h2>
         </div>
-        <button id="changeSubjectBtn" class="ghost-btn" type="button">Đổi môn</button>
       </div>
       <p class="muted-text">Chọn bài/phần và chế độ để bắt đầu.</p>
       <div class="lesson-filter">
@@ -1552,10 +1609,9 @@ function setupHomeViewLayout() {
           <button id="examContinueBtn" class="ghost-btn" type="button" hidden>Tiếp tục</button>
       </div>
   `;
-  elements.homeView.appendChild(quizStartCard);
+  elements.subjectView.appendChild(quizStartCard);
   elements.quizStartCard = quizStartCard;
   elements.selectedSubjectTitle = quizStartCard.querySelector('#selectedSubjectTitle');
-  elements.changeSubjectBtn = quizStartCard.querySelector('#changeSubjectBtn');
   elements.lessonSelect = quizStartCard.querySelector('#lessonSelect');
   elements.practiceStartBtn = quizStartCard.querySelector('#practiceStartBtn');
   elements.practiceContinueBtn = quizStartCard.querySelector('#practiceContinueBtn');
@@ -1634,7 +1690,98 @@ reviewCard.innerHTML = `
 elements.homeView.appendChild(reviewCard);
 elements.reviewCard = reviewCard;
   loadSubjects(); // Load and render subjects
-  syncPausedQuizButtons(); // Update continue buttons
+}
+
+// Video chỉ tạo khi có URL và người dùng không bật "giảm chuyển động". Không có video thì
+// khung hero tự hiện nền gradient / poster trong CSS.
+function syncHomeHeroVideo() {
+  const hero = elements.homeHero;
+  if (!hero) return;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wantVideo = Boolean(HOME_HERO_VIDEO_URL) && !reduceMotion;
+  let video = hero.querySelector('video');
+
+  if (!wantVideo) {
+    video?.remove();
+    return;
+  }
+  if (video) return;
+
+  video = document.createElement('video');
+  video.className = 'home-hero-video';
+  video.muted = true;
+  video.defaultMuted = true;
+  video.autoplay = true;
+  video.loop = true;
+  video.playsInline = true;
+  video.preload = 'metadata';
+  video.tabIndex = -1;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('aria-hidden', 'true');
+  if (HOME_HERO_POSTER_URL) video.poster = HOME_HERO_POSTER_URL;
+  // Video lỗi (sai link, mất mạng) thì quay về nền gradient / poster.
+  video.addEventListener('error', () => video.remove());
+  video.src = HOME_HERO_VIDEO_URL;
+  hero.prepend(video);
+  syncHomeHeroPlayback();
+}
+
+// Rời Trang chủ thì dừng video để đỡ tốn pin và dữ liệu trên điện thoại.
+function syncHomeHeroPlayback() {
+  const video = elements.homeHero?.querySelector('video');
+  if (!video) return;
+  if (currentView === 'home') video.play()?.catch(() => {});
+  else video.pause();
+}
+
+function draftModeLabel(mode) {
+  switch (mode) {
+    case 'exam_30': return 'Thi thử 30 câu';
+    case 'exam_70': return 'Thi thử 70 câu';
+    case 'retry_wrong': return 'Làm lại câu sai';
+    default: return 'Luyện tập';
+  }
+}
+
+// Khối "Bài đang làm dở" ở Trang chủ: mọi bài đã tạm dừng của tài khoản này, mỗi môn tối đa 1 bài.
+function renderHomeResumeCard() {
+  const card = elements.resumeCard;
+  if (!card) return;
+
+  const drafts = availableSubjects
+    .map((subject) => ({ subject, draft: getPausedQuizDraft(subject.slug, currentUserId) }))
+    .filter((row) => row.draft)
+    .sort((a, b) => String(b.draft.savedAt || '').localeCompare(String(a.draft.savedAt || '')));
+
+  if (!drafts.length) {
+    card.innerHTML = `
+      <h2>Bài đang làm dở</h2>
+      <p class="muted-text">Chưa có bài nào đang làm dở. Chọn một môn ở mục Môn học trên menu để bắt đầu.</p>
+    `;
+    return;
+  }
+
+  card.innerHTML = `
+    <h2>Bài đang làm dở</h2>
+    <ul class="resume-list">
+      ${drafts.map(({ subject, draft }) => {
+        const total = Number(draft.questions?.length || 0);
+        const answered = Array.isArray(draft.answers)
+          ? draft.answers.filter((answer) => answer !== null && answer !== undefined).length
+          : 0;
+        const savedAt = draft.savedAt ? new Date(draft.savedAt).toLocaleString('vi-VN') : '';
+        return `
+          <li class="resume-item">
+            <div class="resume-info">
+              <strong>${escapeHtml(subject.name)}</strong>
+              <span class="muted-text">${escapeHtml(draftModeLabel(resolveDraftMode(draft)))} · Đã làm ${answered}/${total} câu${savedAt ? ` · Lưu lúc ${escapeHtml(savedAt)}` : ''}</span>
+            </div>
+            <button class="primary-btn" type="button" data-resume-slug="${escapeHtml(subject.slug)}">Tiếp tục</button>
+          </li>`;
+      }).join('')}
+    </ul>
+  `;
 }
 
 // Hiển thị tên môn học dạng IN HOA (chỉ đổi ở giao diện, không sửa dữ liệu trong DB)
@@ -1646,9 +1793,7 @@ function toUpperSubjects(list) {
 async function loadSubjects() {
     if (configError) {
         availableSubjects = toUpperSubjects(FALLBACK_SUBJECTS);
-        renderSubjectCards();
-        updateHomeCardsVisibility();
-        renderMainNav();
+        handleSubjectsLoaded();
         return;
     }
     try {
@@ -1664,56 +1809,23 @@ async function loadSubjects() {
         availableSubjects = FALLBACK_SUBJECTS;
     }
     availableSubjects = toUpperSubjects(availableSubjects);
-    renderSubjectCards();
-    updateHomeCardsVisibility();
+    handleSubjectsLoaded();
+}
+
+function handleSubjectsLoaded() {
     renderMainNav();
+    updateSubjectViewTitle();
+    renderHomeResumeCard();
 }
 
-// New: Render subject cards
-function renderSubjectCards() {
-    if (!elements.subjectGrid) return;
-    elements.subjectGrid.innerHTML = ''; // Clear existing cards
-
-    availableSubjects.forEach(subject => {
-        const card = document.createElement('button');
-        card.className = `subject-card-final ${subject.slug === selectedSubjectSlug ? 'active is-selected' : ''}`;
-        card.type = 'button';
-        card.dataset.slug = subject.slug;
-        card.innerHTML = `
-            <span class="subject-name-final">${escapeHtml(subject.name)}</span>
-        `;
-        card.addEventListener('click', () => {
-            selectedSubjectSlug = subject.slug;
-            localStorage.setItem('selectedSubjectSlug', selectedSubjectSlug);
-            renderSubjectCards(); // Re-render to update selection
-            if (elements.confirmSubjectBtn) elements.confirmSubjectBtn.disabled = false;
-            loadLessons(); // Reload lessons for the new subject
-            setStatus(`Đã chọn môn: ${subject.name}`, 'info');
-        });
-        elements.subjectGrid.appendChild(card);
-    });
+function getSubjectName(slug) {
+    return availableSubjects.find((subject) => subject.slug === slug)?.name || slug || '';
 }
 
-function updateHomeCardsVisibility() {
-  if (elements.subjectSelectionCard) {
-    elements.subjectSelectionCard.hidden = Boolean(confirmedSubjectSlug);
-  }
-  if (elements.quizStartCard) {
-    elements.quizStartCard.hidden = !confirmedSubjectSlug;
-  }
-  if (elements.announcementCard) {
-    elements.announcementCard.hidden = Boolean(confirmedSubjectSlug);
-  }
-  if (elements.reviewCard) {
-    elements.reviewCard.hidden = Boolean(confirmedSubjectSlug);
-  }
-
-  if (confirmedSubjectSlug && elements.selectedSubjectTitle) {
-    const subject = availableSubjects.find(s => s.slug === confirmedSubjectSlug);
-    if (subject) {
-      elements.selectedSubjectTitle.textContent = `Ôn tập: ${subject.name}`;
+function updateSubjectViewTitle() {
+    if (confirmedSubjectSlug && elements.selectedSubjectTitle) {
+        elements.selectedSubjectTitle.textContent = `Ôn tập: ${getSubjectName(confirmedSubjectSlug)}`;
     }
-  }
 }
 
 
@@ -1876,11 +1988,6 @@ async function checkSession() {
 
     await ensureProfileForSession(session);
     updateRetryWrongButton();
-    await Promise.all([
-      loadHistory(),
-      loadLeaderboard(),
-      loadLessons(),
-    ]);
 
     setView('home');
   } catch (error) {
@@ -1954,7 +2061,6 @@ async function handleAuthSubmit(event) {
         updateUserUI(data.session);
         await ensureProfileForSession(data.session);
         updateRetryWrongButton();
-        await Promise.all([loadHistory(), loadLeaderboard()]);
         setView('home');
       }
 
@@ -1969,7 +2075,6 @@ async function handleAuthSubmit(event) {
             updateUserUI(data.session);
       await ensureProfileForSession(data.session);
       updateRetryWrongButton();
-      await Promise.all([loadHistory(), loadLeaderboard()]);
       setView('home');
       setStatus('Đăng nhập thành công.', 'success');
 
@@ -2002,7 +2107,7 @@ async function handleLogout() {
 
   try {
     // Đang làm bài thì lưu lại trước, đăng nhập lại vẫn tiếp tục được.
-    if (isQuizVisible() && questions.length) pauseQuiz();
+    leaveQuizIfActive();
 
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
@@ -2016,6 +2121,8 @@ async function handleLogout() {
   } catch (error) {
     console.error(error);
     setStatus('Không thể đăng xuất. Vui lòng thử lại.', 'error');
+    // Bài đã được lưu ở trên, không để màn làm bài trống.
+    if (isQuizVisible()) setView('home');
   }
 }
 
@@ -2030,6 +2137,7 @@ function clearQuizState() {
   durationMinutes = 0;
   totalDurationSeconds = 0;
   isPaused = false;
+  pausedByHide = false;
   stopTimer();
 
   // Không xóa bài tạm ở đây. Bài tạm đã được tách theo tài khoản + môn,
@@ -2377,6 +2485,7 @@ async function startPractice() {
   quizMode = 'practice';
   currentMode = 'quiz';
   isLoading = true;
+  const loadToken = ++quizLoadToken;
 
   resetQuizForNewStart();
 
@@ -2400,6 +2509,9 @@ async function startPractice() {
       p_subject_slug: confirmedSubjectSlug, // New: Filter by selected subject
     });
 
+    // Đã rời màn làm bài trong lúc chờ (ví dụ chọn môn khác trên menu): bỏ kết quả này.
+    if (loadToken !== quizLoadToken) return;
+
     if (error) {
       console.error('[startPractice] rpc error:', {
         message: error.message,
@@ -2414,7 +2526,7 @@ async function startPractice() {
     }
 
     if (!Array.isArray(data) || data.length === 0) {
-      loadError = 'Môn học này hiện chưa có câu hỏi. Vui lòng chọn môn khác (như Chính Trị, Cơ Sở Dữ Liệu) hoặc thêm dữ liệu vào Supabase.';
+      loadError = 'Môn học này hiện chưa có câu hỏi. Vui lòng chọn môn khác trên menu.';
       setStatus(loadError, 'error');
       showSection('dashboard');
       return;
@@ -2443,10 +2555,11 @@ async function startPractice() {
       details: error?.details,
       hint: error?.hint,
     });
+    if (loadToken !== quizLoadToken) return;
     setStatus(error?.message || 'Có lỗi xảy ra khi bắt đầu luyện tập.', 'error');
     showSection('dashboard');
   } finally {
-    isLoading = false;
+    if (loadToken === quizLoadToken) isLoading = false;
   }
 }
 
@@ -2474,6 +2587,7 @@ async function startExam(totalQuestions) {
 
   currentMode = 'quiz';
   isLoading = true;
+  const loadToken = ++quizLoadToken;
 
   resetQuizForNewStart();
 
@@ -2499,6 +2613,9 @@ async function startExam(totalQuestions) {
       p_subject_slug: confirmedSubjectSlug, // New: Filter by selected subject
     });
 
+    // Đã rời màn làm bài trong lúc chờ (ví dụ chọn môn khác trên menu): bỏ kết quả này.
+    if (loadToken !== quizLoadToken) return;
+
     if (error) {
       console.error('[startExam] rpc error:', {
         message: error.message,
@@ -2515,7 +2632,7 @@ async function startExam(totalQuestions) {
     }
 
     if (!Array.isArray(data) || data.length === 0) {
-      loadError = 'Môn học này hiện chưa có câu hỏi. Vui lòng chọn môn khác (như Chính Trị, Cơ Sở Dữ Liệu) hoặc thêm dữ liệu vào Supabase.';
+      loadError = 'Môn học này hiện chưa có câu hỏi. Vui lòng chọn môn khác trên menu.';
       elements.quizStatus.textContent = loadError;
       elements.quizCard.innerHTML = `<p class="muted-text">${escapeHtml(loadError)}</p>`;
       setStatus(loadError, 'error');
@@ -2558,11 +2675,12 @@ async function startExam(totalQuestions) {
       details: error?.details,
       hint: error?.hint,
     });
+    if (loadToken !== quizLoadToken) return;
     loadError = error?.message || 'Có lỗi xảy ra khi bắt đầu bài làm.';
     setStatus(loadError, 'error');
     showSection('dashboard');
   } finally {
-    isLoading = false;
+    if (loadToken === quizLoadToken) isLoading = false;
   }
 }
 
@@ -2865,7 +2983,9 @@ async function submitQuiz() {
     clearDraft();
     pausedQuizDraft = null;
     syncPausedQuizButtons();
-    quizMode = null;
+    // Bài đã nộp thì xoá khỏi bộ nhớ. Nếu còn, chuyển tab sẽ gọi saveDraft() và tạo lại
+    // một "bài đang làm dở" giả, tiếp tục bài đó rồi nộp là ra thêm một dòng lịch sử.
+    clearQuizState();
 
     // Tải tuần tự để chắc chắn bảng xếp hạng nhận dữ liệu vừa lưu.
     await loadHistory();
@@ -4143,40 +4263,6 @@ function wireEvents() {
     });
   }
 
-  if (elements.changeSubjectBtn) {
-    elements.changeSubjectBtn.addEventListener('click', () => {
-      // Chỉ bỏ xác nhận môn trên giao diện; không xóa bài tạm của môn cũ.
-      confirmedSubjectSlug = null;
-      pausedQuizDraft = null;
-      syncPausedQuizButtons();
-      updateHomeCardsVisibility();
-
-      if (elements.confirmSubjectBtn) {
-        elements.confirmSubjectBtn.disabled = !selectedSubjectSlug;
-      }
-    });
-  }
-
-  if (elements.confirmSubjectBtn) {
-    elements.confirmSubjectBtn.addEventListener('click', () => {
-      if (selectedSubjectSlug) {
-        confirmedSubjectSlug = selectedSubjectSlug;
-        selectedLesson = 'all';
-
-        updateHomeCardsVisibility();
-        loadLessons();
-
-        // Chỉ tìm bài tạm đúng tài khoản và đúng môn vừa xác nhận.
-        syncPausedQuizButtons();
-
-        const subject = availableSubjects.find(
-          (item) => item.slug === confirmedSubjectSlug
-        );
-        if (subject) setStatus(`Đã chọn môn: ${subject.name}`, 'info');
-      }
-    });
-  }
-
   if (elements.examContinueBtn) {
     elements.examContinueBtn.addEventListener('click', continuePausedQuiz);
   }
@@ -4190,7 +4276,7 @@ function wireEvents() {
 // - Luôn lưu nháp bài đang làm và dừng đồng hồ (giống trước đây).
 // - Quay lại trong AWAY_EXIT_MS: giữ nguyên màn hình đang học; nếu bài bị dừng
 //   do rời app (không phải người dùng bấm "Tạm dừng") thì tự chạy tiếp.
-// - Quay lại sau AWAY_EXIT_MS: thoát về trang chủ, bài đã lưu để bấm "Tiếp tục".
+// - Quay lại sau AWAY_EXIT_MS: thoát về trang chủ, bài đã lưu nằm ở khối "Bài đang làm dở".
 // - Tắt hẳn app: lần mở sau bắt đầu lại từ trang chủ (trạng thái không lưu).
 const AWAY_EXIT_MS = 10 * 60 * 1000;
 let hiddenAt = 0;
@@ -4204,7 +4290,8 @@ function showAppNotice(message) {
     el = document.createElement('div');
     el.id = 'appNotice';
     el.setAttribute('role', 'status');
-    el.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:9999;max-width:min(92vw,560px);padding:12px 16px;border-radius:12px;background:#1e293b;color:#fff;font-size:15px;line-height:1.45;box-shadow:0 10px 30px rgba(15,23,42,.25);cursor:pointer';
+    // Đặt dưới thanh menu, z-index thấp hơn header (100) để menu mở ra không bị che.
+    el.style.cssText = 'position:fixed;left:50%;top:calc(var(--site-header-h, 0px) + 12px);transform:translateX(-50%);z-index:90;max-width:min(92vw,560px);padding:12px 16px;border-radius:12px;background:#1e293b;color:#fff;font-size:15px;line-height:1.45;box-shadow:0 10px 30px rgba(15,23,42,.25);cursor:pointer';
     el.addEventListener('click', () => { el.hidden = true; });
     document.body.appendChild(el);
   }
@@ -4232,7 +4319,7 @@ function handleReturnToApp() {
     const mins = Math.round(AWAY_EXIT_MS / 60000);
     showAppNotice(
       hadQuiz
-        ? `Bạn đã rời app hơn ${mins} phút nên bài làm đã được lưu và tạm dừng. Bấm "Tiếp tục" để làm tiếp.`
+        ? `Bạn đã rời app hơn ${mins} phút nên bài làm đã được lưu và tạm dừng. Bấm "Tiếp tục" ở mục Bài đang làm dở để làm tiếp.`
         : `Bạn đã rời app hơn ${mins} phút nên app đã quay về trang chủ.`
     );
     return;
@@ -4354,12 +4441,6 @@ if (!configError) {
       ensureProfileForSession(session);
       updateRetryWrongButton();
 
-      Promise.all([
-        loadHistory(),
-        loadLeaderboard(),
-        loadLessons(),
-      ]);
-
       setView('home');
     } else {
       clearQuizState();
@@ -4401,11 +4482,8 @@ if (!configError && isPasswordRecoveryUrl()) {
   // Từ phiên bản này, mỗi tài khoản + môn có một khóa riêng.
   localStorage.removeItem(LEGACY_QUIZ_DRAFT_KEY);
 
-    // Nếu có bài làm đang lưu, chỉ hiển thị nút "Tiếp tục" ở màn hình Home.
-  // Không tự động nhảy vào màn hình làm bài.
-  pausedQuizDraft = getPausedQuizDraft(confirmedSubjectSlug, currentUserId);
-  syncPausedQuizButtons();
-
+  // Bài làm đang lưu chỉ hiện ở khối "Bài đang làm dở" (Trang chủ) và nút "Tiếp tục" ở
+  // màn môn học. Không tự động nhảy vào màn hình làm bài.
 
   if (configError) {
     return;

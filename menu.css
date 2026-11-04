@@ -383,3 +383,116 @@ body .app-shell > header.app-brand-plain[hidden] {
     transition: none;
   }
 }
+
+/* ======================= Trang chủ ======================= */
+
+/* Khung hero. #homeView > section ở style-final-fix.css là thẻ panel dùng !important
+   (nền trắng, viền, padding), nên phải !important để thắng. */
+#homeView > .home-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: clamp(15rem, 44vh, 27rem);
+  padding: 2rem 1.25rem !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 0 !important;
+  background:
+    var(--hero-poster, none) center / cover no-repeat,
+    linear-gradient(135deg, #2a1a63 0%, #5b34b5 48%, #1f5a9e 100%) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.home-hero-video {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Lớp phủ tối để chữ dễ đọc trên video */
+.home-hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(20, 12, 50, 0.35), rgba(20, 12, 50, 0.6));
+}
+
+.home-hero-content {
+  max-width: 44rem;
+}
+
+#homeView .home-hero-content h1 {
+  margin: 0 0 0.6rem;
+  color: #ffffff !important;
+  font-size: clamp(1.75rem, 4.2vw, 3rem);
+  font-weight: 700 !important;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+#homeView .home-hero-content p {
+  margin: 0;
+  color: #ece7ff !important;
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  line-height: 1.5;
+}
+
+.resume-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.resume-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+}
+
+.resume-info {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+/* Khối này nằm trong #homeView, luật "#homeView button" thêm margin cho nút */
+#homeView .resume-item .primary-btn {
+  margin: 0 !important;
+  min-width: 7.5rem;
+}
+
+/* ======================= Màn môn học ======================= */
+
+/* Thẻ LÀM BÀI chuyển từ #homeView sang #subjectView: giữ cách canh lề và màu chữ
+   mà style-final-fix.css đang đặt theo #homeView. */
+#subjectView button {
+  margin: 6px 8px 6px 0 !important;
+}
+
+#subjectView select {
+  margin: 8px 0 12px !important;
+}
+
+#subjectView label,
+#subjectView .muted-text,
+#subjectView p:not(.eyebrow) {
+  color: var(--app-muted) !important;
+}
+
+#subjectView h2 {
+  color: var(--app-text) !important;
+}
