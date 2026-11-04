@@ -3326,8 +3326,9 @@ const newClassState = () => ({
   takeQuizTitle: '',
   reviewData: [],
   reviewSummary: null,
-  quizLeaderboard: [],
-  quizLeaderboardTitle: '',
+  resultsQuiz: null,
+  resultsRows: [],
+  resultsSort: { key: 'student_code', dir: 1 },
   joinCodePrefill: '',
   loading: false,
   message: '',
@@ -3400,7 +3401,7 @@ function paintClassContent(html) {
 
 function groupFocusSelector(el) {
   if (!el?.dataset?.classAction) return null;
-  const attrs = ['classAction', 'classId', 'quizId', 'userId', 'key'];
+  const attrs = ['classAction', 'classId', 'quizId', 'userId', 'key', 'sortKey'];
   const toAttr = (key) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
   return attrs
     .filter((key) => el.dataset[key])
@@ -3416,7 +3417,7 @@ async function renderClassScreen() {
     case 'createQuiz': return renderCreateQuizForm();
     case 'takeQuiz': return renderTakeQuizScreen();
     case 'review': return renderReviewScreen();
-    case 'quizResults': return renderQuizLeaderboardScreen();
+    case 'quizResults': return renderQuizResultsScreen();
     case 'list':
     default:
       return renderClassListScreen();
@@ -5181,65 +5182,197 @@ function renderReviewScreen() {
   `);
 }
 
-// ---------- 6. Bảng tổng kết (admin) ------------------------------------------
+// ---------- 10. Bảng kết quả (chủ nhóm, quản trị viên, sau khi bài kết thúc) -----
 
-async function openQuizLeaderboard(quizId, quizTitle) {
+async function openQuizResults(quiz) {
   classState.screen = 'quizResults';
-  classState.quizLeaderboardTitle = quizTitle || '';
+  classState.quizId = quiz.quiz_id;
+  classState.resultsQuiz = quiz;
+  classState.resultsRows = [];
+  classState.resultsSort = { key: 'student_code', dir: 1 };
   classState.loading = true;
-  renderQuizLeaderboardScreen();
+  classSetMessage('');
+  renderQuizResultsScreen();
   try {
-    const { data, error } = await supabase.rpc('get_class_quiz_leaderboard', { p_class_quiz_id: quizId });
+    const { data, error } = await supabase.rpc('get_class_quiz_results', { p_quiz_id: quiz.quiz_id });
     if (error) throw error;
-    classState.quizLeaderboard = data || [];
+    classState.resultsRows = data || [];
   } catch (err) {
     classSetMessage(err.message || 'Không tải được kết quả.', 'error');
   } finally {
     classState.loading = false;
-    renderQuizLeaderboardScreen();
+    if (classState.screen === 'quizResults') renderQuizResultsScreen();
   }
 }
 
-function renderQuizLeaderboardScreen() {
-  const rows = classState.quizLeaderboard;
-  const submitted = rows.filter((r) => r.status === 'submitted');
-  const avg = submitted.length
-    ? Math.round((submitted.reduce((sum, r) => sum + Number(r.percent || 0), 0) / submitted.length) * 10) / 10
-    : 0;
+const RESULT_COLUMNS = [
+  { key: 'student_code', label: 'Mã Sinh Viên' },
+  { key: 'full_name', label: 'Họ Và Tên' },
+  { key: 'score10', label: 'Điểm', numeric: true },
+  { key: 'correct_count', label: 'Số Câu Đúng', numeric: true },
+  { key: 'wrong_count', label: 'Số Câu Sai', numeric: true },
+  { key: 'duration_seconds', label: 'Thời Gian Làm', numeric: true },
+];
 
-  elements.classContent.innerHTML = `
-    <div class="section-header">
-      <div>
-        <p class="eyebrow">Kết quả</p>
-        <h3>${escapeHtml(classState.quizLeaderboardTitle)}</h3>
-      </div>
-      <button class="ghost-btn" type="button" data-class-action="back-detail">← Quay lại lớp</button>
-    </div>
-    ${classMessageHtml()}
-    <div class="about-card" style="margin-bottom:16px;">
-      <p class="muted-text">Đã nộp: ${submitted.length}/${rows.length} &nbsp;|&nbsp; Điểm trung bình: ${avg}%</p>
-    </div>
-    ${classState.loading ? '<p class="muted-text">Đang tải...</p>' : ''}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Tên</th><th>Trạng thái</th><th>Đúng/Tổng</th><th>Điểm %</th><th>Nộp lúc</th></tr></thead>
-        <tbody>
-          ${rows.map((r) => `
-            <tr>
-              <td>${escapeHtml(r.full_name)}</td>
-              <td>${escapeHtml(classStatusLabel(r.status))}</td>
-              <td>${r.correct_count != null ? `${Number(r.correct_count)}/${Number(r.total_count)}` : '-'}</td>
-              <td>${r.percent != null ? Number(r.percent) + '%' : '-'}</td>
-              <td>${formatClassDate(r.submitted_at)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '-';
+  const total = Math.max(0, Math.round(Number(seconds)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${String(m).padStart(2, '0')}:${s}`;
 }
 
-// ---------- 7. Event delegation ----------------------------------------------
+// Người không làm bài luôn ở cuối bảng, ô trống luôn xếp sau, dù sắp theo cột nào.
+function sortedResultRows() {
+  const { key, dir } = classState.resultsSort;
+  const column = RESULT_COLUMNS.find((c) => c.key === key);
+  const isEmpty = (v) => v === null || v === undefined || v === '';
+  return [...classState.resultsRows].sort((a, b) => {
+    const absent = Number(a.status === 'absent') - Number(b.status === 'absent');
+    if (absent) return absent;
+    const x = a[key];
+    const y = b[key];
+    if (isEmpty(x) || isEmpty(y)) return Number(isEmpty(x)) - Number(isEmpty(y));
+    const order = column?.numeric ? Number(x) - Number(y) : String(x).localeCompare(String(y), 'vi', { numeric: true });
+    return order * dir || String(a.full_name).localeCompare(String(b.full_name), 'vi');
+  });
+}
+
+function resultsSummary() {
+  const rows = classState.resultsRows;
+  const done = rows.filter((r) => r.status !== 'absent');
+  const scores = done.map((r) => Number(r.score10 || 0));
+  return {
+    submitted: done.length,
+    total: rows.length,
+    average: scores.length ? scores.reduce((sum, s) => sum + s, 0) / scores.length : null,
+    max: scores.length ? Math.max(...scores) : null,
+    min: scores.length ? Math.min(...scores) : null,
+  };
+}
+
+function renderQuizResultsScreen() {
+  const quiz = classState.resultsQuiz;
+  const rows = sortedResultRows();
+  const sum = resultsSummary();
+  const { key: sortKey, dir } = classState.resultsSort;
+
+  paintClassContent(`
+    <div class="group-head">
+      <button class="ghost-btn" type="button" data-class-action="back-detail">← Quay lại nhóm</button>
+    </div>
+    <div class="group-head">
+      <div class="group-head-main">
+        <h2>Bảng kết quả - ${escapeHtml(quiz?.title || '')}</h2>
+      </div>
+      ${rows.length ? `<div class="group-head-actions"><button class="primary-btn" type="button" data-class-action="export-results">Xuất CSV</button></div>` : ''}
+    </div>
+    ${classMessageHtml()}
+    ${classState.loading ? '<p class="muted-text">Đang tải...</p>' : ''}
+    ${!classState.loading && rows.length === 0 && !classState.message ? '<p class="muted-text">Nhóm chưa có người tham gia nào.</p>' : ''}
+    ${rows.length ? `
+      <p class="group-summary">
+        Số người nộp: <strong>${sum.submitted}/${sum.total}</strong> ·
+        Điểm trung bình: <strong>${escapeHtml(formatScore10(sum.average))}</strong> ·
+        Cao nhất: <strong>${escapeHtml(formatScore10(sum.max))}</strong> ·
+        Thấp nhất: <strong>${escapeHtml(formatScore10(sum.min))}</strong>
+      </p>
+      <div class="table-wrap">
+        <table class="group-results-table">
+          <thead>
+            <tr>
+              ${RESULT_COLUMNS.map((c) => {
+                const active = c.key === sortKey;
+                return `<th scope="col" ${active ? `aria-sort="${dir > 0 ? 'ascending' : 'descending'}"` : ''} class="${c.numeric ? 'is-num' : ''}">
+                  <button class="group-sort-btn" type="button" data-class-action="sort-results" data-sort-key="${c.key}">${escapeHtml(c.label)}<span class="group-sort-mark" aria-hidden="true">${active ? (dir > 0 ? '↑' : '↓') : ''}</span></button>
+                </th>`;
+              }).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r) => {
+              const absent = r.status === 'absent';
+              return `
+                <tr class="${absent ? 'is-absent' : ''}">
+                  <td>${escapeHtml(r.student_code || '-')}</td>
+                  <td class="group-result-name">${escapeHtml(r.full_name)}</td>
+                  <td class="is-num"><strong>${escapeHtml(formatScore10(absent ? 0 : r.score10))}</strong></td>
+                  <td class="is-num">${absent ? '-' : Number(r.correct_count || 0)}</td>
+                  <td class="is-num">${absent ? '-' : Number(r.wrong_count || 0)}</td>
+                  <td class="is-num">
+                    ${absent ? '-' : escapeHtml(formatDuration(r.duration_seconds))}
+                    ${absent ? '<span class="group-result-note">Không làm bài</span>' : ''}
+                    ${r.status === 'auto' ? '<span class="group-result-note">tự nộp</span>' : ''}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="group-hint group-results-note">Số câu sai gồm cả câu bỏ trống. Điểm trung bình, cao nhất, thấp nhất chỉ tính người đã nộp.</p>
+    ` : ''}
+  `);
+}
+
+function handleSortResults(key) {
+  const current = classState.resultsSort;
+  classState.resultsSort = current.key === key ? { key, dir: -current.dir } : { key, dir: 1 };
+  renderQuizResultsScreen();
+}
+
+// Tên file: bỏ dấu, thay khoảng trắng bằng dấu gạch ngang.
+function slugForFileName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'khong-ten';
+}
+
+// Họ tên do người dùng tự đặt: ô bắt đầu bằng = + - @ sẽ bị Excel hiểu là công thức, phải vô hiệu hoá.
+function csvCell(value) {
+  let text = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(text) && text !== '-') text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function exportResultsCsv() {
+  const quiz = classState.resultsQuiz;
+  const header = RESULT_COLUMNS.map((c) => c.label);
+  const lines = sortedResultRows().map((r) => {
+    const absent = r.status === 'absent';
+    let time = absent ? 'Không làm bài' : formatDuration(r.duration_seconds);
+    if (r.status === 'auto') time += ' (tự nộp)';
+    return [
+      r.student_code || '-',
+      r.full_name,
+      formatScore10(absent ? 0 : r.score10),
+      absent ? '-' : Number(r.correct_count || 0),
+      absent ? '-' : Number(r.wrong_count || 0),
+      time,
+    ];
+  });
+  // Có BOM để Excel nhận đúng UTF-8, không lỗi dấu tiếng Việt.
+  const csv = `\ufeff${[header, ...lines].map((cells) => cells.map(csvCell).join(',')).join('\r\n')}\r\n`;
+  const when = new Date(quiz?.start_at || Date.now());
+  const stamp = `${when.getFullYear()}${String(when.getMonth() + 1).padStart(2, '0')}${String(when.getDate()).padStart(2, '0')}`;
+  const fileName = `${slugForFileName(classState.classDetail?.name)}_${slugForFileName(quiz?.title)}_${stamp}.csv`;
+
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------- 11. Event delegation ----------------------------------------------
 
 function wireClassEvents() {
   if (!elements.classContent) return;
@@ -5323,7 +5456,13 @@ function wireClassEvents() {
         if (quiz) handleDeleteQuiz(quiz);
         break;
       case 'view-results':
-        if (quiz) openQuizLeaderboard(quiz.quiz_id, quiz.title);
+        if (quiz) openQuizResults(quiz);
+        break;
+      case 'sort-results':
+        handleSortResults(btn.dataset.sortKey);
+        break;
+      case 'export-results':
+        exportResultsCsv();
         break;
       case 'take-quiz':
         if (quiz) handleTakeQuiz(quiz);

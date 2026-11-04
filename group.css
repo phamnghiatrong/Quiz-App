@@ -568,3 +568,76 @@
   font-weight: inherit !important;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Bảng kết quả ---------- */
+.group-summary {
+  margin: 0 0 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+/* Đủ rộng cho 6 cột, màn hẹp thì .table-wrap cuộn ngang, cột Họ tên không xuống dòng từng chữ */
+.group-results-table {
+  min-width: 720px;
+}
+
+.group-results-table th {
+  padding: 4px 6px !important;
+}
+
+#classContent button.group-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto !important;
+  min-height: 36px !important;
+  padding: 4px 6px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  color: var(--app-ink-3) !important;
+}
+
+#classContent button.group-sort-btn:hover {
+  background: var(--app-surface-2) !important;
+  transform: none !important;
+  box-shadow: none !important;
+  color: var(--app-ink) !important;
+}
+
+#classContent .group-sort-mark {
+  min-width: 0.75em;
+  color: inherit !important;
+}
+
+.group-results-table .is-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.group-results-table th.is-num button {
+  justify-content: flex-end;
+}
+
+.group-results-table .group-result-name {
+  min-width: 11rem;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+#classContent .group-result-note {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--app-ink-3) !important;
+}
+
+.group-results-table tr.is-absent td {
+  color: var(--app-ink-3) !important;
+}
+
+#classContent .group-results-note {
+  margin-top: 0.75rem;
+}
