@@ -118,6 +118,7 @@ const elements = {
 
   leaderboardCard: document.getElementById('leaderboardCard'),
   leaderboardTableBody: document.getElementById('leaderboardTableBody'),
+  leaderboardTitle: document.getElementById('leaderboardTitle'),
   refreshLeaderboardBtn: document.getElementById('refreshLeaderboardBtn'),
 
   classCard: document.getElementById('classCard'),
@@ -253,6 +254,7 @@ let selectedExamType = null;
 
 // Môn đang xem ở Bảng xếp hạng, độc lập với môn đang làm bài.
 let leaderboardSubjectSlug = null;
+let leaderboardRequestId = 0;
 
 // draft/paused quiz (đọc từ localStorage qua loadDraft)
 let pausedQuizDraft = null;
@@ -863,7 +865,7 @@ function setView(viewKey) {
       setDashboardContainerMode('default');
       showSection('dashboard');
       if (elements.leaderboardCard) elements.leaderboardCard.hidden = false;
-      loadLeaderboard();
+      updateLeaderboardTitle();
       break;
     case 'classes':
       setDashboardContainerMode('default');
@@ -883,8 +885,7 @@ function setView(viewKey) {
       setDashboardContainerMode('default');
       showSection('none');
       if (elements.englishTabs) elements.englishTabs.hidden = false;
-      if (elements.tensesView) elements.tensesView.hidden = false;
-      openTenses();
+      showEnglishTab(getEnglishTab());
       break;
     case 'chinese':
       setDashboardContainerMode('default');
@@ -929,6 +930,69 @@ function setView(viewKey) {
 }
 
 
+
+// Trang "Tiếng Anh": thanh tab cấp 1 chọn giữa 2 mục, mỗi mục vẫn giữ thanh trang con
+// (cấp 2) và logic riêng của nó. Tab đang chọn nhớ ở localStorage.
+const ENGLISH_TAB_KEY = 'quizapp-english-tab';
+const ENGLISH_TABS = [
+  { id: 'tenses', label: '12 thì tiếng Anh', panel: 'tensesView' },
+  { id: 'vocab', label: 'Từ vựng tiếng Anh', panel: 'vocabView' },
+];
+
+function getEnglishTab() {
+  try {
+    const saved = localStorage.getItem(ENGLISH_TAB_KEY);
+    if (ENGLISH_TABS.some((tab) => tab.id === saved)) return saved;
+  } catch {
+    // Trình duyệt chặn localStorage: dùng tab đầu.
+  }
+  return ENGLISH_TABS[0].id;
+}
+
+function setupEnglishTabs() {
+  const bar = elements.englishTabs;
+  if (!bar) return;
+  bar.innerHTML = ENGLISH_TABS.map((tab) => `
+    <button class="english-tab" type="button" role="tab" id="englishTab-${tab.id}" data-english-tab="${tab.id}" aria-controls="${tab.panel}">${escapeHtml(tab.label)}</button>
+  `).join('');
+
+  bar.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-english-tab]');
+    if (button) showEnglishTab(button.dataset.englishTab);
+  });
+
+  // Mẫu tablist chuẩn: mũi tên trái/phải chuyển tab.
+  bar.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const index = ENGLISH_TABS.findIndex((tab) => tab.id === getEnglishTab());
+    const step = event.key === 'ArrowRight' ? 1 : -1;
+    const next = ENGLISH_TABS[(index + step + ENGLISH_TABS.length) % ENGLISH_TABS.length];
+    showEnglishTab(next.id);
+    document.getElementById(`englishTab-${next.id}`)?.focus();
+  });
+}
+
+function showEnglishTab(tabId) {
+  try {
+    localStorage.setItem(ENGLISH_TAB_KEY, tabId);
+  } catch {
+    // Không lưu được thì lần sau mở tab đầu, không ảnh hưởng gì khác.
+  }
+
+  ENGLISH_TABS.forEach((tab) => {
+    const selected = tab.id === tabId;
+    if (elements[tab.panel]) elements[tab.panel].hidden = !selected;
+    const button = document.getElementById(`englishTab-${tab.id}`);
+    if (button) {
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+  });
+
+  if (tabId === 'vocab') openVocab();
+  else openTenses();
+}
 
 // Mục "12 thì tiếng Anh": module tenses/ chỉ được tải khi người dùng mở mục
 // này lần đầu (không làm chậm lúc vào app). Tiến độ học lưu theo từng tài
@@ -1348,11 +1412,27 @@ function navigateTo(navKey, params = {}) {
 
   if (navKey === 'subject') {
     openSubject(params.slug);
+  } else if (navKey === 'leaderboard') {
+    openLeaderboard(params.slug);
   } else {
     setView(navKey);
   }
 
   window.scrollTo({ top: 0 });
+}
+
+// Bảng xếp hạng chỉ tải khi đã chọn một môn trên menu.
+function openLeaderboard(slug) {
+  leaderboardSubjectSlug = String(slug || '').trim() || null;
+  setView('leaderboard');
+  loadLeaderboard(leaderboardSubjectSlug);
+}
+
+function updateLeaderboardTitle() {
+  if (!elements.leaderboardTitle) return;
+  elements.leaderboardTitle.textContent = leaderboardSubjectSlug
+    ? `Top tổng điểm: ${getSubjectName(leaderboardSubjectSlug)}`
+    : 'Top tổng điểm';
 }
 
 // Mở màn môn học (chọn bài/phần, luyện tập, thi thử).
@@ -1735,12 +1815,23 @@ function syncHomeHeroPlayback() {
   else video.pause();
 }
 
-function draftModeLabel(mode) {
+// Nhãn tiếng Việt của chế độ làm bài. Hai nhãn "... câu / ... phút" là các lượt thi thử
+// lưu trước khi app dùng mã exam_30 / exam_70 (get_leaderboard vẫn tính điểm các lượt này).
+// Giá trị lạ thì in nguyên văn để không mất thông tin của dòng lịch sử cũ.
+function formatQuizMode(mode) {
   switch (mode) {
-    case 'exam_30': return 'Thi thử 30 câu';
-    case 'exam_70': return 'Thi thử 70 câu';
-    case 'retry_wrong': return 'Làm lại câu sai';
-    default: return 'Luyện tập';
+    case 'exam_30':
+    case '30 câu / 20 phút':
+      return 'Thi thử 30 câu';
+    case 'exam_70':
+    case '70 câu / 60 phút':
+      return 'Thi thử 70 câu';
+    case 'practice':
+      return 'Luyện tập';
+    case 'retry_wrong':
+      return 'Làm lại câu sai';
+    default:
+      return mode || '';
   }
 }
 
@@ -1775,7 +1866,7 @@ function renderHomeResumeCard() {
           <li class="resume-item">
             <div class="resume-info">
               <strong>${escapeHtml(subject.name)}</strong>
-              <span class="muted-text">${escapeHtml(draftModeLabel(resolveDraftMode(draft)))} · Đã làm ${answered}/${total} câu${savedAt ? ` · Lưu lúc ${escapeHtml(savedAt)}` : ''}</span>
+              <span class="muted-text">${escapeHtml(formatQuizMode(resolveDraftMode(draft)))} · Đã làm ${answered}/${total} câu${savedAt ? ` · Lưu lúc ${escapeHtml(savedAt)}` : ''}</span>
             </div>
             <button class="primary-btn" type="button" data-resume-slug="${escapeHtml(subject.slug)}">Tiếp tục</button>
           </li>`;
@@ -1815,6 +1906,7 @@ async function loadSubjects() {
 function handleSubjectsLoaded() {
     renderMainNav();
     updateSubjectViewTitle();
+    updateLeaderboardTitle();
     renderHomeResumeCard();
 }
 
@@ -1886,7 +1978,7 @@ function updateSubjectViewTitle() {
 
     setStatus('Đã lưu họ tên.', 'success');
 
-    await loadLeaderboard();
+    if (leaderboardSubjectSlug) await loadLeaderboard(leaderboardSubjectSlug);
   } catch (error) {
     console.error('[saveNewName] error caught:', {
       message: error?.message,
@@ -3008,14 +3100,14 @@ async function submitQuiz() {
 
 async function loadHistory() {
   if (configError) {
-    elements.historyTableBody.innerHTML = '<tr><td colspan="7">Cấu hình Supabase chưa hợp lệ. Vui lòng cập nhật VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY.</td></tr>';
+    elements.historyTableBody.innerHTML = '<tr><td colspan="8">Cấu hình Supabase chưa hợp lệ. Vui lòng cập nhật VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY.</td></tr>';
     return;
   }
 
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData?.session?.user) {
-      elements.historyTableBody.innerHTML = '<tr><td colspan="7">Bạn cần đăng nhập để xem lịch sử.</td></tr>';
+      elements.historyTableBody.innerHTML = '<tr><td colspan="8">Bạn cần đăng nhập để xem lịch sử.</td></tr>';
       return;
     }
 
@@ -3027,7 +3119,7 @@ async function loadHistory() {
     if (error) throw error;
 
     if (!data?.length) {
-      elements.historyTableBody.innerHTML = '<tr><td colspan="7">Chưa có dữ liệu lịch sử nào.</td></tr>';
+      elements.historyTableBody.innerHTML = '<tr><td colspan="8">Chưa có dữ liệu lịch sử nào.</td></tr>';
       return;
     }
 
@@ -3038,7 +3130,8 @@ async function loadHistory() {
         return `
           <tr>
             <td>${escapeHtml(createdAt)}</td>
-            <td>${escapeHtml(item.mode)}</td>
+            <td>${escapeHtml(getSubjectName(item.subject_slug) || '-')}</td>
+            <td>${escapeHtml(formatQuizMode(item.mode))}</td>
             <td>${escapeHtml(item.total_questions)}</td>
             <td>${escapeHtml(item.correct_count ?? item.correct_answers ?? 0)}</td>
             <td>${escapeHtml(item.wrong_count ?? item.wrong_answers ?? 0)}</td>
@@ -3049,7 +3142,7 @@ async function loadHistory() {
       .join('');
   } catch (error) {
     console.error(error);
-    elements.historyTableBody.innerHTML = '<tr><td colspan="7">Không thể tải lịch sử. Vui lòng kiểm tra kết nối Supabase.</td></tr>';
+    elements.historyTableBody.innerHTML = '<tr><td colspan="8">Không thể tải lịch sử. Vui lòng kiểm tra kết nối Supabase.</td></tr>';
   }
 }
 
@@ -3083,7 +3176,7 @@ function togglePause() {
   }
 }
 
-async function loadLeaderboard() {
+async function loadLeaderboard(slug) {
   if (!elements.leaderboardTableBody) return;
 
   if (configError) {
@@ -3092,22 +3185,26 @@ async function loadLeaderboard() {
     return;
   }
 
+  const requestId = ++leaderboardRequestId;
+  const subjectSlug = String(slug || '').trim();
+
+  if (!subjectSlug) {
+    leaderboardData = [];
+    elements.leaderboardTableBody.innerHTML =
+      '<tr><td colspan="4">Chọn một môn ở mục Bảng xếp hạng trên menu.</td></tr>';
+    return;
+  }
+
+  elements.leaderboardTableBody.innerHTML = '<tr><td colspan="4">Đang tải...</td></tr>';
+
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-
-    if (!sessionData?.session?.user) {
-      elements.leaderboardTableBody.innerHTML =
-        '<tr><td colspan="4">Bạn cần đăng nhập để xem bảng xếp hạng.</td></tr>';
-      return;
-    }
-
-    const subjectSlug =
-      confirmedSubjectSlug || selectedSubjectSlug || null;
-
     const { data, error } = await supabase.rpc('get_leaderboard', {
       p_limit: 50,
       p_subject_slug: subjectSlug,
     });
+
+    // Người dùng đã chọn môn khác trong lúc chờ: bỏ kết quả về muộn này.
+    if (requestId !== leaderboardRequestId) return;
 
     if (error) {
       console.error('[loadLeaderboard] RPC error:', {
@@ -3149,6 +3246,7 @@ async function loadLeaderboard() {
       })
       .join('');
   } catch (error) {
+    if (requestId !== leaderboardRequestId) return;
     console.error('[loadLeaderboard] Unexpected error:', {
       message: error?.message,
       code: error?.code,
@@ -3296,7 +3394,7 @@ function renderClassListScreen() {
             ${rows.map((c) => `
               <tr>
                 <td>${escapeHtml(c.name)}</td>
-                <td>${escapeHtml(c.subject_slug || '-')}</td>
+                <td>${escapeHtml(getSubjectName(c.subject_slug) || '-')}</td>
                 <td>${c.role === 'admin' ? 'Quản trị' : 'Thành viên'}</td>
                 <td>${Number(c.member_count || 0)}</td>
                 <td>${Number(c.quiz_count || 0)}</td>
@@ -4123,6 +4221,7 @@ function wireClassEvents() {
 
 function wireEvents() {
   setupMainNav();
+  setupEnglishTabs();
 
   elements.modeChips.forEach((chip) => {
     chip.addEventListener('click', () => setAuthMode(chip.dataset.authMode));
@@ -4214,7 +4313,7 @@ function wireEvents() {
 
   elements.refreshHistoryBtn.addEventListener('click', loadHistory);
   if (elements.refreshLeaderboardBtn) {
-    elements.refreshLeaderboardBtn.addEventListener('click', loadLeaderboard);
+    elements.refreshLeaderboardBtn.addEventListener('click', () => loadLeaderboard(leaderboardSubjectSlug));
   }
   if (elements.retryWrongBtn) {
     elements.retryWrongBtn.addEventListener('click', startRetryWrongQuiz);

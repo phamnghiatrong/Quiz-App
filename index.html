@@ -407,6 +407,7 @@
                 <thead>
                   <tr>
                     <th>Thời gian</th>
+                    <th>Môn</th>
                     <th>Chế độ</th>
                     <th>Tổng câu</th>
                     <th>Đúng</th>
@@ -427,7 +428,7 @@
             <div class="section-header">
               <div>
                 <p class="eyebrow">Bảng xếp hạng</p>
-                <h3>Top tổng điểm</h3>
+                <h3 id="leaderboardTitle">Top tổng điểm</h3>
               </div>
               <button id="refreshLeaderboardBtn" class="ghost-btn" type="button">Làm mới</button>
             </div>
@@ -504,13 +505,15 @@
                   </p>
                   <p class="muted-text"><strong>Phiên bản 4.5</strong> cập nhật ngày 04/10/2026</p>
                 </section>
+              </div>
 
-                <section class="panel about-card">
-                  <p class="eyebrow">Thông tin</p>
-                  <h3>Thông tin cập nhật</h3>
+        <!-- Thông tin nâng cấp và Tùy chỉnh -->
+        <section id="changelogCard" class="panel about-card" hidden>
+          <p class="eyebrow">Thông tin</p>
+          <h3>Thông tin nâng cấp</h3>
 
-                  <div class="changelog-list">
-                    <details class="changelog-item" open>
+          <div class="changelog-list">
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 4.5</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -522,7 +525,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 4.4</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -534,7 +537,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 4.3</strong>&nbsp;- Cập nhật ngày: 04/10/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -545,7 +548,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 4.2</strong>&nbsp;- Cập nhật ngày: 03/10/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -556,7 +559,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 4.1</strong>&nbsp;- Cập nhật ngày: 30/09/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -567,7 +570,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 4.0</strong>&nbsp;- Cập nhật ngày: 17/09/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -582,7 +585,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 3.0</strong>&nbsp;- Cập nhật ngày: 19/06/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -596,7 +599,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 2.5</strong>&nbsp;- Cập nhật ngày: 17/06/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -607,7 +610,7 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 2.0</strong>&nbsp;- Ngày phát hành: 14/06/2026</summary>
                       <div class="changelog-content">
                         <p><strong>Thông tin đã cập nhật:</strong></p>
@@ -620,18 +623,14 @@
                       </div>
                     </details>
 
-                    <details class="changelog-item" open>
+                    <details class="changelog-item">
                       <summary><strong>Phiên bản 1.0</strong>&nbsp;- Ngày phát hành: 06/06/2026</summary>
                       <div class="changelog-content">
                         <p>Phiên bản phát hành đầu tiên.</p>
                       </div>
                     </details>
-                  </div>
-                </section>
-              </div>
-
-        <!-- Thông tin nâng cấp và Tùy chỉnh -->
-        <section id="changelogCard" class="panel about-card" hidden></section>
+          </div>
+        </section>
         <section id="settingsCard" class="panel about-card" hidden></section>
 
         <!-- Trang "Tiếng Anh": thanh tab cấp 1 nằm trên 2 mục 12 thì / Từ vựng -->

@@ -496,3 +496,66 @@ body .app-shell > header.app-brand-plain[hidden] {
 #subjectView h2 {
   color: var(--app-text) !important;
 }
+
+/* ======================= Trang Tiếng Anh: tab cấp 1 ======================= */
+
+/* Cấp 1 là gạch chân, chữ lớn. Cấp 2 (thanh trang con của từng mục) vẫn là các nút
+   tròn bên dưới, nên hai cấp không lẫn vào nhau. !important để thắng luật button chung. */
+.english-tabs:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  border-bottom: 2px solid var(--app-border);
+}
+
+#englishTabs .english-tab {
+  position: relative;
+  min-height: 3rem !important;
+  margin: 0 0 -2px;
+  padding: 0.5rem 0.25rem !important;
+  border: 0 !important;
+  border-bottom: 3px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--app-muted) !important;
+  font-size: 1.125rem;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#englishTabs .english-tab:hover {
+  color: var(--app-text) !important;
+}
+
+#englishTabs .english-tab[aria-selected="true"] {
+  color: var(--app-primary-2) !important;
+  border-bottom-color: var(--app-primary) !important;
+}
+
+#englishTabs .english-tab:focus-visible {
+  outline: 2px solid var(--app-primary) !important;
+  outline-offset: 2px;
+}
+
+/* ======================= Thông tin nâng cấp ======================= */
+
+.changelog-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.changelog-item {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+}
+
+.changelog-item > summary {
+  cursor: pointer;
+}
+
+.changelog-content {
+  margin-top: 0.5rem;
+}
