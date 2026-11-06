@@ -133,11 +133,13 @@ tiết xem `CLASS_FEATURE_DESIGN.md`.
 - **Menu**: đầu `app.js` có `MENU_HIDDEN_SUBJECTS` (môn tạm ẩn khỏi menu) và
   `MENU_SUBJECT_ORDER` (thứ tự môn). Thêm môn mới trên Supabase thì menu tự cập nhật,
   môn chưa có trong danh sách thứ tự được xếp cuối.
-- **Trang chủ**: chỉ có menu, video toàn màn hình và chân trang. Đầu `app.js` có
-  `HOME_HERO_VIDEO_URL` và `HOME_HERO_POSTER_URL`. Để trống hoặc người dùng bật "giảm
-  chuyển động" thì hiện nền tĩnh (gradient hoặc poster). Nên nén video dưới khoảng 5 MB,
-  720p, H.264/MP4 hoặc WebM. Muốn thêm khối thì đặt vào `#homeContent` trong `index.html`,
-  khung này nằm giữa video và chân trang và tự ẩn khi trống.
+- **Trang chủ**: chỉ có menu, video toàn màn hình và chân trang. Video nằm trong
+  `public/hero/`: `hero-16x9.mp4` (1920x1080) kèm poster `hero-16x9.webp`, khai báo ở
+  `HOME_HERO_SOURCES` đầu `app.js`. Hiện chỉ bản web có video; bản điện thoại
+  (`HOME_HERO_MOBILE_QUERY`, mốc 768px) để trống nên hiện nền gradient. Người dùng bật "giảm
+  chuyển động" hoặc tiết kiệm dữ liệu thì chỉ hiện poster. Video là H.264, không âm thanh,
+  faststart; service worker không cache video. Muốn thêm khối thì đặt vào `#homeContent`
+  trong `index.html`, khung này nằm giữa video và chân trang và tự ẩn khi trống.
 - **Một lớp khung**: mỗi trang chỉ có một lớp khung. `#dashboardSection` và khung nội dung
   của 3 module không phải là khung, thẻ bên trong mới là khung. Trong thẻ thì dùng đường
   kẻ hoặc vạch màu bên trái, không lồng thêm ô.

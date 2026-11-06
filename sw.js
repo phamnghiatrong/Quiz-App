@@ -5,7 +5,7 @@
    - Ưu tiên lấy dữ liệu mới khi online (network-first cho navigation).
 */
 
-const CACHE_NAME = 'quiz-app-v5';
+const CACHE_NAME = 'quiz-app-v6';
 
 // Chỉ liệt kê file CÓ THẬT. Đường dẫn tương đối để chạy đúng cả khi mở
 // bằng Live Server lẫn khi deploy lên Vercel.
@@ -112,6 +112,10 @@ self.addEventListener('fetch', (event) => {
 
   // Không bao giờ cache chính service worker (để bản mới được nhận ngay).
   if (url.pathname.endsWith('/sw.js')) return;
+
+  // Video Trang chủ: để trình duyệt tự tải từng đoạn (Range, mã 206). Không qua cache vì
+  // cache.put không nhận phản hồi 206, và Safari chỉ phát được khi nhận đúng phản hồi Range.
+  if (request.destination === 'video' || /\.(mp4|webm)$/i.test(url.pathname)) return;
 
   // Trang đặt lại mật khẩu luôn phải lấy bản mới (link chứa token dùng 1 lần).
   if (url.pathname.includes('reset-password')) {

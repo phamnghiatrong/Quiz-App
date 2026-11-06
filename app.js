@@ -30,10 +30,16 @@ const supabase = configError
         storage: window.localStorage,
       },
     });
-// Video toàn màn hình ở Trang chủ. Để trống URL = chưa có video, hiện nền tĩnh (gradient hoặc poster).
-// Video nên nén nhỏ: dưới khoảng 5 MB, 720p, H.264/MP4 hoặc WebM, vì nhiều người mở bằng 4G.
-const HOME_HERO_VIDEO_URL = '';
-const HOME_HERO_POSTER_URL = '';
+// Video toàn màn hình ở Trang chủ. Hiện chỉ bản web (máy tính) có video; bản điện thoại để trống
+// nên hiện nền gradient tĩnh. Có video dọc cho điện thoại thì điền vào mục mobile.
+// Để trống video = chưa có video, hiện nền tĩnh (gradient hoặc poster).
+// File đặt trong public/hero, đi thẳng ra mạng (service worker không cache video).
+const HOME_HERO_SOURCES = {
+  web: { video: './public/hero/hero-16x9.mp4', poster: './public/hero/hero-16x9.webp' },
+  mobile: { video: '', poster: '' },
+};
+// Cùng mốc 768px với giao diện mobile trong CSS; thêm điện thoại xoay ngang (màn cảm ứng, thấp).
+const HOME_HERO_MOBILE_QUERY = '(max-width: 768px), (pointer: coarse) and (max-height: 500px)';
 // Cuộn quá số px này thì menu trên Trang chủ hết trong suốt, hiện lại nền tối.
 const HOME_HEADER_SOLID_AFTER = 48;
 
@@ -1687,9 +1693,6 @@ async function loadLessons(slug) {
 
 function setupHomeViewLayout() {
   // Trang chủ: khung nằm sẵn trong index.html, ở đây chỉ gắn poster, video và hiệu ứng cuộn.
-  if (HOME_HERO_POSTER_URL && elements.homeHeroMedia) {
-    elements.homeHeroMedia.style.setProperty('--hero-poster', `url("${encodeURI(HOME_HERO_POSTER_URL)}")`);
-  }
   syncHomeHeroVideo();
   setupHomeScrollEffects();
 
@@ -1742,20 +1745,40 @@ function setupHomeViewLayout() {
   loadSubjects(); // Load and render subjects
 }
 
-// Video chỉ tạo khi có URL và người dùng không bật "giảm chuyển động". Không có video thì
-// khung tự hiện nền tĩnh (gradient hoặc poster) trong CSS.
+function getHomeHeroSource() {
+  return window.matchMedia(HOME_HERO_MOBILE_QUERY).matches
+    ? HOME_HERO_SOURCES.mobile
+    : HOME_HERO_SOURCES.web;
+}
+
+// Video chỉ tạo khi có URL, người dùng không bật "giảm chuyển động" và không bật chế độ tiết kiệm
+// dữ liệu (Save-Data). Không có video thì khung tự hiện nền tĩnh (gradient hoặc poster) trong CSS.
+// Gọi lại khi đổi cỡ cửa sổ qua mốc web / điện thoại.
 function syncHomeHeroVideo() {
   const hero = elements.homeHeroMedia;
   if (!hero) return;
+  const source = getHomeHeroSource();
+  if (source.poster) hero.style.setProperty('--hero-poster', `url("${encodeURI(source.poster)}")`);
+  else hero.style.removeProperty('--hero-poster');
+
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const wantVideo = Boolean(HOME_HERO_VIDEO_URL) && !reduceMotion;
+  const saveData = Boolean(navigator.connection?.saveData);
+  const wantVideo = Boolean(source.video) && !reduceMotion && !saveData;
   let video = hero.querySelector('video');
 
   if (!wantVideo) {
     video?.remove();
     return;
   }
-  if (video) return;
+  if (video) {
+    if (video.dataset.src !== source.video) {
+      video.poster = source.poster || '';
+      video.dataset.src = source.video;
+      video.src = source.video;
+      syncHomeHeroPlayback();
+    }
+    return;
+  }
 
   video = document.createElement('video');
   video.className = 'home-hero-video';
@@ -1769,10 +1792,11 @@ function syncHomeHeroVideo() {
   video.setAttribute('muted', '');
   video.setAttribute('playsinline', '');
   video.setAttribute('aria-hidden', 'true');
-  if (HOME_HERO_POSTER_URL) video.poster = HOME_HERO_POSTER_URL;
+  if (source.poster) video.poster = source.poster;
   // Video lỗi (sai link, mất mạng) thì quay về nền gradient / poster.
   video.addEventListener('error', () => video.remove());
-  video.src = HOME_HERO_VIDEO_URL;
+  video.dataset.src = source.video;
+  video.src = source.video;
   hero.prepend(video);
   syncHomeHeroPlayback();
 }
@@ -1827,6 +1851,7 @@ function setupHomeScrollEffects() {
     syncHomeHeroVideo();
     syncHomeScrollEffects();
   });
+  window.matchMedia(HOME_HERO_MOBILE_QUERY).addEventListener('change', syncHomeHeroVideo);
 }
 
 // Nhãn tiếng Việt của chế độ làm bài. Hai nhãn "... câu / ... phút" là các lượt thi thử
