@@ -1751,8 +1751,10 @@ function getHomeHeroSource() {
     : HOME_HERO_SOURCES.web;
 }
 
-// Video chỉ tạo khi có URL, người dùng không bật "giảm chuyển động" và không bật chế độ tiết kiệm
-// dữ liệu (Save-Data). Không có video thì khung tự hiện nền tĩnh (gradient hoặc poster) trong CSS.
+// Video chỉ tạo khi có URL và người dùng không bật chế độ tiết kiệm dữ liệu (Save-Data). Không có
+// video thì khung tự hiện nền tĩnh (gradient hoặc poster) trong CSS.
+// Không tắt video khi máy bật "giảm chuyển động": Windows tắt "Animation effects" là máy báo
+// reduce (nhiều laptop để sẵn), mà video chỉ chuyển động nhẹ, không nhấp nháy.
 // Gọi lại khi đổi cỡ cửa sổ qua mốc web / điện thoại.
 function syncHomeHeroVideo() {
   const hero = elements.homeHeroMedia;
@@ -1761,9 +1763,8 @@ function syncHomeHeroVideo() {
   if (source.poster) hero.style.setProperty('--hero-poster', `url("${encodeURI(source.poster)}")`);
   else hero.style.removeProperty('--hero-poster');
 
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const saveData = Boolean(navigator.connection?.saveData);
-  const wantVideo = Boolean(source.video) && !reduceMotion && !saveData;
+  const wantVideo = Boolean(source.video) && !saveData;
   let video = hero.querySelector('video');
 
   if (!wantVideo) {
@@ -1829,14 +1830,11 @@ function syncHomeScrollEffects() {
     return;
   }
 
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    media.style.opacity = '';
-  } else {
-    // Khung #homeHero cao hơn màn hình: phần dôi ra là quãng cuộn để video mờ dần.
-    const fadeDistance = Math.max(1, hero.offsetHeight - media.offsetHeight);
-    const progress = Math.min(1, Math.max(0, scrollY / fadeDistance));
-    media.style.opacity = progress >= 1 ? '0' : (1 - progress).toFixed(3);
-  }
+  // Khung #homeHero cao hơn màn hình: phần dôi ra là quãng cuộn để video mờ dần. Mờ theo tay
+  // cuộn của người dùng nên vẫn giữ khi máy bật "giảm chuyển động".
+  const fadeDistance = Math.max(1, hero.offsetHeight - media.offsetHeight);
+  const progress = Math.min(1, Math.max(0, scrollY / fadeDistance));
+  media.style.opacity = progress >= 1 ? '0' : (1 - progress).toFixed(3);
   syncHomeHeroPlayback();
 }
 

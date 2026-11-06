@@ -513,20 +513,6 @@ body.is-home .app-frame {
   border: 0;
 }
 
-/* Giảm chuyển động: không có quãng cuộn và không mờ dần, nền tĩnh cuộn đi như bình thường. */
-@media (prefers-reduced-motion: reduce) {
-  #homeView > .home-hero {
-    height: 100vh;
-    height: 100svh;
-  }
-
-  .home-hero-media {
-    position: static;
-    height: 100%;
-    will-change: auto;
-  }
-}
-
 /* Chỗ chèn thêm khối giữa video và chân trang. Tự ẩn khi trống. */
 #homeView > .home-content {
   display: grid;

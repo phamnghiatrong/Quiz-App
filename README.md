@@ -136,8 +136,9 @@ tiết xem `CLASS_FEATURE_DESIGN.md`.
 - **Trang chủ**: chỉ có menu, video toàn màn hình và chân trang. Video nằm trong
   `public/hero/`: `hero-16x9.mp4` (1920x1080) kèm poster `hero-16x9.webp`, khai báo ở
   `HOME_HERO_SOURCES` đầu `app.js`. Hiện chỉ bản web có video; bản điện thoại
-  (`HOME_HERO_MOBILE_QUERY`, mốc 768px) để trống nên hiện nền gradient. Người dùng bật "giảm
-  chuyển động" hoặc tiết kiệm dữ liệu thì chỉ hiện poster. Video là H.264, không âm thanh,
+  (`HOME_HERO_MOBILE_QUERY`, mốc 768px) để trống nên hiện nền gradient. Người dùng bật tiết
+  kiệm dữ liệu thì chỉ hiện poster (bật "giảm chuyển động" vẫn phát video, vì video chuyển
+  động nhẹ và Windows hay bật sẵn chế độ này). Video là H.264, không âm thanh,
   faststart; service worker không cache video. Muốn thêm khối thì đặt vào `#homeContent`
   trong `index.html`, khung này nằm giữa video và chân trang và tự ẩn khi trống.
 - **Một lớp khung**: mỗi trang chỉ có một lớp khung. `#dashboardSection` và khung nội dung
