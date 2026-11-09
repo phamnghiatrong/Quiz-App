@@ -105,10 +105,16 @@ export default {
   async fetch(request, env) {
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-    const secret = env.REPORT_MAIL_SECRET;
+    // trim(): `$s | npx wrangler secret put` trên PowerShell gửi kèm ký tự xuống dòng (CR/LF)
+    // vào cuối secret, làm lệch so với secret bên Supabase.
+    const secret = String(env.REPORT_MAIL_SECRET || '').trim();
     if (!secret) return json({ error: 'REPORT_MAIL_SECRET chưa được đặt' }, 500);
-    const auth = request.headers.get('Authorization') || '';
-    if (!safeEqual(auth, `Bearer ${secret}`)) return json({ error: 'Unauthorized' }, 401);
+    const auth = (request.headers.get('Authorization') || '').trim();
+    if (!safeEqual(auth, `Bearer ${secret}`)) {
+      // Chỉ ghi độ dài để dò lỗi lệch secret, không ghi giá trị.
+      console.log('unauthorized', { got: Math.max(0, auth.length - 7), expected: secret.length });
+      return json({ error: 'Unauthorized', got_length: Math.max(0, auth.length - 7), expected_length: secret.length }, 401);
+    }
 
     const raw = await request.text();
     if (raw.length > MAX_BODY_BYTES) return json({ error: 'Nội dung quá lớn' }, 413);
