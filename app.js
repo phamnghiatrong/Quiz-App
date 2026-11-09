@@ -2087,7 +2087,7 @@ function sendFeedbackEmail() {
     return;
   }
 
-  const to = 'tp058235@gmail.com';
+  const to = 'phamnghiatrong1412@gmail.com';
   const subject = 'Góp ý về ứng dụng Quiz App';
 
   const userLine = isAuthed()
