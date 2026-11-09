@@ -1,6 +1,6 @@
 # quiz-report-mail (Cloudflare Worker)
 
-Gửi email báo cáo câu hỏi của Quiz App về `tp058235@gmail.com` bằng Cloudflare Email Routing.
+Gửi email báo cáo câu hỏi của Quiz App về `phamnghiatrong1412@gmail.com` bằng Cloudflare Email Routing.
 
 ```
 Trình duyệt --(JWT)--> Supabase Edge Function report-question --(Bearer REPORT_MAIL_SECRET)-->
@@ -17,7 +17,7 @@ https://report-mail.phamnghiatrong.com (Worker) --(send_email binding)--> Gmail 
    **Email Service** > **Email Routing** > chọn `phamnghiatrong.com` > bật / Enable. Cho Cloudflare tự
    thêm bản ghi MX, SPF, DKIM. (Giao diện cũ: chọn tên miền > Email > Email Routing.)
 2. **Xác minh hộp thư nhận**: cùng trang Email Routing > tab **Destination Addresses** > nhập
-   `tp058235@gmail.com`, mở Gmail bấm **Verify email address**. Trạng thái phải là Verified.
+   `phamnghiatrong1412@gmail.com`, mở Gmail bấm **Verify email address**. Trạng thái phải là Verified.
 3. **Tạo secret** (PowerShell, chạy 1 lần, copy kết quả):
    ```powershell
    -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 40 | ForEach-Object {[char]$_})
