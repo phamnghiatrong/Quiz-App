@@ -1622,6 +1622,81 @@ function cancelEditStudentCode() {
 
 
 
+// Gom bài/phần thành nhóm và sắp đúng thứ tự cho ô chọn bài.
+// - Tên bài dạng "Nhóm - Phần" (cắt ở " - " đầu tiên): nếu từ 2 bài trở lên chung "Nhóm"
+//   thì gom vào <optgroup label="Nhóm">, trong nhóm chỉ hiện "Phần".
+// - So sánh có số (numeric): "Units 4-6" đứng trước "Units 10-12".
+// - Trong nhóm: Unit/Units trước, Review sau, rồi các bài khác.
+// - Thứ tự nhóm: Giáo trình, Extra, Đề cương, rồi các nhóm khác theo tên.
+const LESSON_GROUP_ORDER = [/^giáo trình/i, /^extra/i, /^đề cương/i];
+const lessonCollator = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
+
+function lessonItemRank(label) {
+  if (/^units?\b/i.test(label)) return 0;
+  if (/^review\b/i.test(label)) return 1;
+  return 2;
+}
+
+function compareLessonLabels(a, b) {
+  return lessonItemRank(a) - lessonItemRank(b) || lessonCollator.compare(a, b);
+}
+
+function lessonGroupRank(name) {
+  const i = LESSON_GROUP_ORDER.findIndex((re) => re.test(name));
+  return i === -1 ? LESSON_GROUP_ORDER.length : i;
+}
+
+function lessonOptionsHtml(rows) {
+  const list = (Array.isArray(rows) ? rows : [])
+    .filter((r) => r && r.lesson)
+    .map((r) => {
+      const lesson = String(r.lesson);
+      const cut = lesson.indexOf(' - ');
+      return {
+        lesson,
+        count: Number(r.question_count) || 0,
+        group: cut > 0 ? lesson.slice(0, cut).trim() : '',
+        part: cut > 0 ? lesson.slice(cut + 3).trim() : lesson,
+      };
+    });
+
+  const groupSize = new Map();
+  list.forEach((it) => { if (it.group) groupSize.set(it.group, (groupSize.get(it.group) || 0) + 1); });
+
+  const loose = [];
+  const groups = new Map();
+  list.forEach((it) => {
+    if (it.group && groupSize.get(it.group) > 1) {
+      if (!groups.has(it.group)) groups.set(it.group, []);
+      groups.get(it.group).push(it);
+    } else {
+      loose.push(it);
+    }
+  });
+
+  const opt = (value, label, count) =>
+    `<option value="${escapeHtml(value)}">${escapeHtml(label)} (${count} câu)</option>`;
+
+  const looseHtml = loose
+    .sort((a, b) => compareLessonLabels(a.lesson, b.lesson))
+    .map((it) => opt(it.lesson, it.lesson, it.count))
+    .join('');
+
+  const groupHtml = [...groups.entries()]
+    .sort(([a], [b]) => lessonGroupRank(a) - lessonGroupRank(b) || lessonCollator.compare(a, b))
+    .map(([name, items]) => {
+      const total = items.reduce((s, it) => s + it.count, 0);
+      const inner = items
+        .sort((a, b) => compareLessonLabels(a.part, b.part))
+        .map((it) => opt(it.lesson, it.part, it.count))
+        .join('');
+      return `<optgroup label="${escapeHtml(`${name} (${total} câu)`)}">${inner}</optgroup>`;
+    })
+    .join('');
+
+  return looseHtml + groupHtml;
+}
+
 async function loadLessons(slug) {
   if (!elements.lessonSelect) return;
   if (configError) return;
@@ -1655,19 +1730,10 @@ async function loadLessons(slug) {
 
     questionLessons = Array.isArray(data) ? data : [];
 
-    const options = [
-      { value: 'all', label: 'Tất cả bài/phần' },
-      ...questionLessons.map((row) => ({
-        value: row.lesson,
-        label: `${row.lesson} (${row.question_count} câu)`,
-      })),
-    ];
+    elements.lessonSelect.innerHTML =
+      `<option value="all">Tất cả bài/phần</option>` + lessonOptionsHtml(questionLessons);
 
-    elements.lessonSelect.innerHTML = options
-      .map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
-      .join('');
-
-    elements.lessonSelect.value = options.some((o) => o.value === selectedLesson) ? selectedLesson : 'all';
+    elements.lessonSelect.value = questionLessons.some((r) => r.lesson === selectedLesson) ? selectedLesson : 'all';
     selectedLesson = elements.lessonSelect.value || 'all';
   } catch (error) {
     if (requestId !== lessonsRequestId) return;
@@ -4553,7 +4619,7 @@ async function showCreateQuizForm(classId, returnTo = 'detail') {
 function quizLessonOptionsHtml() {
   return `
     <option value="">Tất cả các bài</option>
-    ${classState.lessonsForQuiz.map((l) => `<option value="${escapeHtml(l.lesson)}">${escapeHtml(l.lesson)} (${Number(l.question_count)} câu)</option>`).join('')}
+    ${lessonOptionsHtml(classState.lessonsForQuiz)}
   `;
 }
 
