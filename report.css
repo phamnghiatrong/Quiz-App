@@ -1,0 +1,200 @@
+/* report.css - Nút "Báo cáo" ở màn làm bài và hộp thoại chọn vấn đề. Link sau group.css.
+   Hộp thoại dùng lại #groupDialog (group.css). style-final-fix.css ép mọi input/button bằng
+   !important (rộng 100%, cao 46px, padding...), nên checkbox/radio và nút ở đây phải
+   khai báo lại kèm !important với selector có id để thắng. Màu lấy từ biến --app-*. */
+
+/* ---------- Nút Báo cáo (góc trên bên phải thẻ làm bài) ---------- */
+@media (min-width: 769px) {
+  #quizSection .quiz-header {
+    align-items: flex-start;
+  }
+
+  #quizSection .quiz-header-actions {
+    margin-left: auto;
+    justify-content: flex-end !important;
+  }
+}
+
+#reportQuestionBtn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px !important;
+  padding: 7px 14px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--app-line-strong) !important;
+  background: transparent !important;
+  color: var(--app-ink-2) !important;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+}
+
+#reportQuestionBtn[hidden] {
+  display: none !important;
+}
+
+#reportQuestionBtn:hover,
+#reportQuestionBtn:focus-visible {
+  border-color: var(--app-bad) !important;
+  color: var(--app-bad) !important;
+  background: var(--app-bad-soft) !important;
+}
+
+#reportQuestionBtn svg {
+  flex: 0 0 auto;
+}
+
+#reportQuestionBtn span {
+  color: inherit !important;
+}
+
+/* ---------- Hộp thoại báo cáo ---------- */
+#groupDialog.report-dialog {
+  width: min(34rem, calc(100vw - 32px));
+}
+
+#groupDialog .report-q-preview {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--app-accent);
+  border-radius: 8px;
+  background: var(--app-surface-2);
+  color: var(--app-ink-2) !important;
+  overflow-wrap: anywhere;
+}
+
+#groupDialog .report-fieldset {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+#groupDialog .report-fieldset[hidden] {
+  display: none;
+}
+
+#groupDialog .report-fieldset legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-weight: 600;
+}
+
+#groupDialog .report-cat-list {
+  display: grid;
+  gap: 2px;
+}
+
+#groupDialog .report-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 10px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+#groupDialog .report-check:hover {
+  background: var(--app-hover-soft, var(--app-surface-2));
+}
+
+#groupDialog .report-check input[type="checkbox"],
+#groupDialog .report-check input[type="radio"] {
+  appearance: auto !important;
+  -webkit-appearance: auto !important;
+  flex: 0 0 auto;
+  width: 18px !important;
+  height: 18px !important;
+  min-height: 0 !important;
+  margin: 2px 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  accent-color: var(--app-accent);
+  cursor: pointer;
+}
+
+#groupDialog .report-check span {
+  color: var(--app-ink) !important;
+  line-height: 1.4;
+}
+
+#groupDialog .report-check:has(input:checked) span {
+  font-weight: 600;
+}
+
+#groupDialog .report-answer-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+#groupDialog .report-answer {
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--app-line-strong);
+}
+
+#groupDialog .report-answer input {
+  margin: 0 !important;
+}
+
+#groupDialog .report-answer:has(input:checked) {
+  border-color: var(--app-accent);
+  background: var(--app-accent-soft);
+}
+
+#groupDialog textarea.report-note {
+  min-height: 84px !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+#groupDialog input:disabled + span,
+#groupDialog textarea:disabled {
+  opacity: 0.6;
+}
+
+/* Điện thoại: tiêu đề bài chiếm hết chiều ngang nên nút thu về chỉ còn biểu tượng cờ,
+   ghim ở góc trên bên phải thẻ (ngang hàng chữ "Đang làm bài"). */
+@media (max-width: 768px) {
+  #quizSection .quiz-header {
+    position: relative;
+  }
+
+  /* Chừa chỗ cho nút ở cả hai bên để tiêu đề (đang căn giữa trên điện thoại) vẫn cân. */
+  #quizSection .quiz-header > div:first-child {
+    width: 100%;
+    padding: 0 48px;
+    box-sizing: border-box;
+  }
+
+  #reportQuestionBtn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1;
+    width: 40px !important;
+    min-height: 40px !important;
+    height: 40px;
+    padding: 0 !important;
+    justify-content: center;
+  }
+
+  #reportQuestionBtn span {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  #groupDialog.report-dialog {
+    padding: 16px;
+  }
+}

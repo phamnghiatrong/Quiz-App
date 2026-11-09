@@ -14,6 +14,8 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `theme.css` | Biến màu của giao diện sáng/tối, cỡ chữ, font. Biến `--app-*` dùng chung cho cả 3 mục con trong Shadow DOM |
 | `menu.css` | Menu ngang, Trang chủ (video, chân trang), tab Tiếng Anh, Tùy chỉnh, luật "mỗi trang một lớp khung" |
 | `group.css` | Giao diện Học nhóm, nạp sau `menu.css` |
+| `report.css` | Nút Báo cáo ở màn làm bài và hộp thoại báo cáo, nạp sau `group.css` |
+| `supabase/functions/report-question/` | Edge Function nhận báo cáo câu hỏi và gửi email qua Brevo |
 | `reset-password.html` / `reset-password.js` | Trang đặt lại mật khẩu từ email |
 | `sw.js` | Service worker (PWA, cache offline) |
 | `manifest.webmanifest` | Khai báo PWA (tên, icon, theme) |
@@ -37,6 +39,8 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 - Tự lưu bài đang làm dở theo từng tài khoản + từng môn, cho phép tạm dừng và làm tiếp
   (nút Tiếp tục nằm ở màn của môn đó; rời app quá 10 phút thì quay về đúng màn môn học)
 - Làm lại các câu sai gần nhất (không tính giờ, không tính điểm BXH)
+- **Báo cáo câu hỏi**: nút Báo cáo ở góc trên bên phải màn làm bài, chọn loại vấn đề, đáp án đề
+  xuất, mô tả; báo cáo lưu vào bảng `question_reports` và gửi email cho tác giả. Xem mục riêng bên dưới.
 - Lịch sử ôn tập và bảng xếp hạng theo từng môn
 - Tùy chỉnh: giao diện Sáng / Tối / Theo hệ thống, cỡ chữ, font chữ
 - Cài được như app (PWA), dùng lại được khi mất mạng
@@ -122,6 +126,24 @@ tiết xem `CLASS_FEATURE_DESIGN.md`.
   nhóm. Muốn chặn phải đổi luồng ôn tập cá nhân.
 - Chưa có màn cho chủ nhóm xem chi tiết bài làm của từng người.
 - Không có thông báo email, không giám sát chuyển tab.
+
+## Báo cáo câu hỏi
+
+Luồng: nút `#reportQuestionBtn` (chỉ hiện khi đang hiển thị một câu hỏi) -> hộp thoại chọn vấn đề
+-> `supabase.functions.invoke('report-question')` -> Edge Function gọi RPC
+`submit_question_report` bằng JWT của người dùng -> RPC kiểm tra, chống spam (15 báo cáo/giờ,
+cùng một câu cách nhau 5 phút), lưu vào `question_reports` kèm ảnh chụp câu hỏi lấy từ DB ->
+Edge Function dựng email theo mục (vấn đề, câu hỏi, phương án và đáp án, người báo cáo, gợi ý
+SQL sửa nhanh) và gửi qua Brevo API.
+
+- DB: `migrations/2026-11-bao-cao-cau-hoi.sql` (đã có trong `schema.sql`).
+- Secrets của Edge Function (Dashboard > Edge Functions > Secrets): `BREVO_API_KEY` (bắt buộc),
+  `REPORT_TO_EMAIL`, `REPORT_FROM_EMAIL` (sender đã xác minh trong Brevo), `REPORT_FROM_NAME`.
+  Thiếu `BREVO_API_KEY` thì báo cáo vẫn lưu, cột `email_sent = false`.
+- Xem báo cáo chưa xử lý: `select * from question_reports where status = 'new' order by created_at desc;`
+  Xử lý xong: `update question_reports set status = 'resolved', resolved_at = now() where id = '...';`
+- Mã loại vấn đề (`REPORT_CATEGORIES` trong `app.js`, `v_allowed` trong RPC, `CATEGORY_LABELS`
+  trong Edge Function) phải khớp nhau ở cả 3 nơi.
 
 ## Ghi chú kỹ thuật
 

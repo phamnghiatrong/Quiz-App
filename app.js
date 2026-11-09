@@ -149,6 +149,7 @@ const elements = {
   quizTitle: document.getElementById('quizTitle'),
   timerBadge: document.getElementById('timerBadge'),
   pauseBtn: document.getElementById('pauseBtn'),
+  reportQuestionBtn: document.getElementById('reportQuestionBtn'),
   quizStatus: document.getElementById('quizStatus'),
     quizCard: document.getElementById('quizCard'),
   prevQuestionBtn: document.getElementById('prevQuestionBtn'),
@@ -770,6 +771,7 @@ function showSection(sectionName) {
   }
 
   syncQuizLookup(resolved === 'quiz');
+  syncReportQuestionButton();
 }
 
 function setView(viewKey) {
@@ -2110,6 +2112,200 @@ function sendFeedbackEmail() {
   if (!newWindow) {
     window.location.href = mailtoUrl;
   }
+}
+
+// ---------- Báo cáo câu hỏi (nút "Báo cáo" góc trên bên phải màn làm bài) ----------
+// Gửi lên Edge Function `report-question`: lưu vào bảng question_reports rồi gửi email cho
+// tác giả qua Brevo. Mã loại vấn đề phải khớp danh sách trong RPC submit_question_report.
+const REPORT_CATEGORIES = [
+  { key: 'wrong_answer', label: 'Đáp án đúng bị sai' },
+  { key: 'question_error', label: 'Đề bài sai, thiếu chữ hoặc lỗi chính tả' },
+  { key: 'option_error', label: 'Phương án trả lời sai, bị lặp chữ hoặc chép nhầm' },
+  { key: 'multiple_or_none', label: 'Có nhiều đáp án đúng hoặc không có đáp án nào đúng' },
+  { key: 'explanation_error', label: 'Giải thích sai hoặc khó hiểu' },
+  { key: 'wrong_place', label: 'Câu hỏi nằm sai môn / sai bài hoặc bị trùng' },
+  { key: 'display_error', label: 'Lỗi hiển thị (mất chữ, lỗi font, tràn khung)' },
+  { key: 'other', label: 'Vấn đề khác' },
+];
+
+let reportQuestionObserverReady = false;
+
+// Chỉ hiện nút khi màn làm bài đang mở và đang hiển thị một câu hỏi thật
+// (không hiện lúc "Đang tải câu hỏi..." hay khi tải lỗi).
+function syncReportQuestionButton() {
+  const btn = elements.reportQuestionBtn;
+  if (!btn) return;
+  const visible = Boolean(
+    elements.quizSection && !elements.quizSection.hidden
+    && questions[currentQuestionIndex]
+    && elements.quizCard?.querySelector('.question-text')
+  );
+  btn.hidden = !visible;
+
+  // quizCard được vẽ lại ở nhiều chỗ (tải câu, lỗi, reset); theo dõi luôn để không sót chỗ nào.
+  if (!reportQuestionObserverReady && elements.quizCard && 'MutationObserver' in window) {
+    reportQuestionObserverReady = true;
+    new MutationObserver(() => syncReportQuestionButton())
+      .observe(elements.quizCard, { childList: true });
+  }
+}
+
+function truncateText(text, max) {
+  const value = String(text ?? '').replace(/\s+/g, ' ').trim();
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+async function readFunctionError(error) {
+  // supabase-js: lỗi HTTP của Edge Function nằm trong error.context (Response).
+  try {
+    const body = await error?.context?.json?.();
+    if (body?.error) return body.error;
+  } catch (_) { /* bỏ qua */ }
+  if (!navigator.onLine) return 'Mất kết nối mạng. Vui lòng thử lại.';
+  return 'Không gửi được báo cáo, vui lòng thử lại sau.';
+}
+
+function openReportQuestionDialog() {
+  const question = questions[currentQuestionIndex];
+  if (!question || !supabase) return;
+
+  const index = currentQuestionIndex;
+  const options = ['A', 'B', 'C', 'D']
+    .filter((key) => hasOptionText(question['option_' + key.toLowerCase()]));
+
+  const bodyHtml = `
+    <p class="report-q-preview"><strong>Câu ${index + 1}/${questions.length}:</strong> ${escapeHtml(truncateText(question.question_text, 160))}</p>
+    <fieldset class="report-fieldset">
+      <legend>Vấn đề bạn gặp (chọn một hoặc nhiều)</legend>
+      <div class="report-cat-list">
+        ${REPORT_CATEGORIES.map((cat) => `
+          <label class="report-check">
+            <input type="checkbox" name="reportCategory" value="${cat.key}" />
+            <span>${escapeHtml(cat.label)}</span>
+          </label>`).join('')}
+      </div>
+    </fieldset>
+    <fieldset class="report-fieldset" data-report-suggest hidden>
+      <legend>Theo bạn, đáp án đúng là</legend>
+      <div class="report-answer-list">
+        ${options.map((key) => `
+          <label class="report-check report-answer">
+            <input type="radio" name="reportSuggest" value="${key}" />
+            <span>${key}</span>
+          </label>`).join('')}
+        <label class="report-check report-answer">
+          <input type="radio" name="reportSuggest" value="" checked />
+          <span>Không chắc</span>
+        </label>
+      </div>
+    </fieldset>
+    <label for="reportNoteInput" data-report-note-label>Mô tả thêm (không bắt buộc)</label>
+    <textarea id="reportNoteInput" class="report-note" rows="3" maxlength="1000" placeholder="VD: Phương án B bị lặp chữ &quot;to to&quot;, theo sách trang 12 thì đáp án là C."></textarea>
+    <p class="group-hint">Báo cáo được gửi tới email của tác giả, kèm nội dung câu hỏi, đáp án bạn đã chọn và tên tài khoản của bạn.</p>
+  `;
+
+  const reportBtn = elements.reportQuestionBtn;
+  let closeTimer = 0;
+
+  openGroupDialog({
+    title: 'Báo cáo câu hỏi',
+    bodyHtml,
+    submitLabel: 'Gửi báo cáo',
+    onOpen: ({ dialog, setMessage }) => {
+      dialog.classList.add('report-dialog');
+      // Sửa lại lựa chọn thì xoá thông báo lỗi cũ.
+      dialog.addEventListener('input', () => setMessage(''));
+      const suggestBox = dialog.querySelector('[data-report-suggest]');
+      const noteLabel = dialog.querySelector('[data-report-note-label]');
+      dialog.addEventListener('change', () => {
+        const checked = new Set(
+          [...dialog.querySelectorAll('input[name="reportCategory"]:checked')].map((el) => el.value)
+        );
+        suggestBox.hidden = !checked.has('wrong_answer');
+        noteLabel.textContent = checked.has('other')
+          ? 'Mô tả thêm (bắt buộc khi chọn "Vấn đề khác")'
+          : 'Mô tả thêm (không bắt buộc)';
+      });
+    },
+    onSubmit: async (api) => {
+      const { dialog, submitBtn } = api;
+      const categories = [...dialog.querySelectorAll('input[name="reportCategory"]:checked')]
+        .map((el) => el.value);
+      const note = dialog.querySelector('#reportNoteInput').value.trim();
+      const suggested = categories.includes('wrong_answer')
+        ? (dialog.querySelector('input[name="reportSuggest"]:checked')?.value || '')
+        : '';
+
+      if (!categories.length) {
+        api.setMessage('Vui lòng chọn ít nhất một vấn đề.');
+        dialog.querySelector('input[name="reportCategory"]')?.focus();
+        return false;
+      }
+      if (categories.includes('other') && note.length < 5) {
+        api.setMessage('Chọn "Vấn đề khác" thì cần mô tả ngắn (ít nhất 5 ký tự).');
+        dialog.querySelector('#reportNoteInput').focus();
+        return false;
+      }
+
+      const selected = selectedAnswers[index] || '';
+      const payload = {
+        question_id: question.id || null,
+        categories,
+        suggested_answer: suggested || null,
+        note: note || null,
+        context: {
+          mode: quizMode || '',
+          mode_label: formatQuizMode(quizMode),
+          quiz_title: elements.quizTitle?.textContent?.trim() || '',
+          question_index: index + 1,
+          question_total: questions.length,
+          selected_answer: selected,
+          subject_slug: confirmedSubjectSlug || '',
+          subject_name: getSubjectName(confirmedSubjectSlug),
+          lesson: question.lesson || '',
+          user_agent: navigator.userAgent.slice(0, 300),
+          // Bản dự phòng: chỉ dùng khi server không tìm thấy câu theo id.
+          client_question: {
+            id: question.id || '',
+            question_text: truncateText(question.question_text, 1500),
+            option_a: truncateText(question.option_a, 400),
+            option_b: truncateText(question.option_b, 400),
+            option_c: truncateText(question.option_c, 400),
+            option_d: truncateText(question.option_d, 400),
+            correct_answer: question.correct_answer || '',
+            explanation: truncateText(question.explanation, 1500),
+            lesson: question.lesson || '',
+            subject_slug: confirmedSubjectSlug || '',
+          },
+        },
+      };
+
+      if (submitBtn) submitBtn.textContent = 'Đang gửi...';
+      const { error } = await supabase.functions.invoke('report-question', { body: payload });
+      if (error) {
+        if (submitBtn) submitBtn.textContent = 'Gửi báo cáo';
+        api.setMessage(await readFunctionError(error));
+        return false;
+      }
+
+      // Thành công: khoá form, báo cảm ơn rồi tự đóng.
+      dialog.querySelectorAll('input, textarea').forEach((el) => { el.disabled = true; });
+      if (submitBtn) {
+        submitBtn.dataset.locked = '1';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Đã gửi';
+      }
+      const cancel = dialog.querySelector('[data-dialog-cancel]');
+      if (cancel) cancel.textContent = 'Đóng';
+      api.setMessage('Đã gửi báo cáo. Cảm ơn bạn đã giúp bộ câu hỏi chính xác hơn!', 'success');
+      closeTimer = window.setTimeout(() => api.close(), 2200);
+      return false;
+    },
+    onClose: () => {
+      window.clearTimeout(closeTimer);
+      if (reportBtn && !reportBtn.hidden) reportBtn.focus({ preventScroll: true });
+    },
+  });
 }
 
 
@@ -5696,6 +5892,10 @@ function wireEvents() {
 
   if (elements.sendFeedbackBtn) {
     elements.sendFeedbackBtn.addEventListener('click', sendFeedbackEmail);
+  }
+
+  if (elements.reportQuestionBtn) {
+    elements.reportQuestionBtn.addEventListener('click', openReportQuestionDialog);
   }
 
   elements.refreshHistoryBtn.addEventListener('click', loadHistory);

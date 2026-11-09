@@ -80,6 +80,7 @@
     <link rel="stylesheet" href="./theme.css?v=20261104-2" />
     <link rel="stylesheet" href="./menu.css?v=20261106-1" />
     <link rel="stylesheet" href="./group.css?v=20261104-1" />
+    <link rel="stylesheet" href="./report.css?v=20261109-1" />
     <style>
       /* Đảm bảo thuộc tính hidden luôn có tác dụng và không bị ghi đè bởi CSS khác */
       html body [hidden] {
@@ -416,7 +417,7 @@
             <div id="homeContent" class="home-content"></div>
 
             <footer id="versionFooter" class="home-footer" aria-label="Phiên bản ứng dụng">
-              <p><strong>Quiz App</strong> - Phiên bản 5.0, cập nhật ngày 04/11/2026</p>
+              <p><strong>Quiz App</strong> - Phiên bản 5.1, cập nhật ngày 09/11/2026</p>
               <p><a href="https://phamnghiatrong.com" target="_blank" rel="noopener">phamnghiatrong.com</a></p>
             </footer>
           </div>
@@ -531,7 +532,10 @@
               <h2 id="quizTitle">Bộ đề</h2>
                         </div>
             <div class="quiz-header-actions">
-
+              <button id="reportQuestionBtn" class="ghost-btn report-question-btn" type="button" aria-haspopup="dialog" aria-label="Báo cáo câu hỏi" title="Báo cáo lỗi của câu hỏi đang làm" hidden>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 22V4"/><path d="M4 4h12l-1.5 4L16 12H4"/></svg>
+                <span>Báo cáo</span>
+              </button>
               <button id="pauseBtn" class="ghost-btn" type="button" hidden>Tạm dừng</button>
               <div class="timer-badge" id="timerBadge">00:00</div>
           </div>
@@ -574,7 +578,7 @@
                                     <p class="muted-text">
                     Ứng dụng hướng đến sự đơn giản, dễ sử dụng và hiệu quả thực tế, giúp việc ôn tập trở nên nhẹ nhàng hơn nhưng vẫn đảm bảo tính nghiêm túc trong học tập.
                   </p>
-                  <p class="muted-text"><strong>Phiên bản 5.0</strong> cập nhật ngày 04/11/2026</p>
+                  <p class="muted-text"><strong>Phiên bản 5.1</strong> cập nhật ngày 09/11/2026</p>
                 </section>
               </div>
 
@@ -584,6 +588,17 @@
           <h3>Thông tin nâng cấp</h3>
 
           <div class="changelog-list">
+                    <details class="changelog-item">
+                      <summary><strong>Phiên bản 5.1</strong>&nbsp;- Cập nhật ngày: 09/11/2026</summary>
+                      <div class="changelog-content">
+                        <p><strong>Thông tin đã cập nhật:</strong></p>
+                        <ul class="about-list">
+                          <li>Thêm nút Báo cáo ở góc trên bên phải màn làm bài: chọn vấn đề của câu hỏi (đáp án sai, đề bài lỗi, phương án bị lặp hoặc chép nhầm, nhiều hoặc không có đáp án đúng, giải thích sai, sai môn hoặc sai bài, lỗi hiển thị, vấn đề khác), có thể chọn đáp án mà bạn cho là đúng và ghi thêm mô tả. Báo cáo được gửi thẳng về email của tác giả.</li>
+                          <li>Danh sách chọn bài/phần được gom nhóm và sắp xếp theo số bài (Units 4-6 đứng trước Units 10-12), bài lẻ như Đề cương ôn tập xếp sau.</li>
+                        </ul>
+                      </div>
+                    </details>
+
                     <details class="changelog-item">
                       <summary><strong>Phiên bản 5.0</strong>&nbsp;- Cập nhật ngày: 04/11/2026</summary>
                       <div class="changelog-content">
@@ -789,7 +804,7 @@
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20261109-2"></script>
+    <script type="module" src="./app.js?v=20261109-3"></script>
 
   </body>
 </html>
