@@ -1,0 +1,25 @@
+# Worker gửi email báo cáo câu hỏi của Quiz App qua Cloudflare Email Routing.
+# Deploy: xem README.md cùng thư mục.
+
+name = "quiz-report-mail"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# Chạy trên tên miền riêng, không mở địa chỉ *.workers.dev.
+workers_dev = false
+routes = [
+  { pattern = "report-mail.phamnghiatrong.com", custom_domain = true }
+]
+
+# Chỉ gửi được tới đúng 1 địa chỉ này (phải là Destination address đã xác minh trong Email Routing).
+send_email = [
+  { name = "REPORT_MAILER", destination_address = "tp058235@gmail.com" }
+]
+
+[vars]
+MAIL_FROM = "bao-cao@phamnghiatrong.com"   # phải thuộc tên miền đã bật Email Routing
+MAIL_FROM_NAME = "Quiz App"
+MAIL_TO = "tp058235@gmail.com"
+
+# Secret (không ghi vào file này):
+#   npx wrangler secret put REPORT_MAIL_SECRET

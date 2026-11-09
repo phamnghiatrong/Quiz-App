@@ -1,14 +1,14 @@
 // Edge Function: report-question
 // Nhận báo cáo câu hỏi từ màn làm bài, lưu vào bảng question_reports (qua RPC
-// submit_question_report, chạy bằng JWT của chính người dùng), rồi gửi email
-// cho tác giả qua Brevo Transactional Email API.
+// submit_question_report, chạy bằng JWT của chính người dùng), rồi gửi email cho tác giả.
 //
-// Secrets cần đặt (Supabase Dashboard > Edge Functions > Secrets):
-//   BREVO_API_KEY      bắt buộc để gửi mail (Brevo > SMTP & API > API Keys).
-//   REPORT_TO_EMAIL    tuỳ chọn, mặc định tp058235@gmail.com
-//   REPORT_FROM_EMAIL  tuỳ chọn, phải là sender đã xác minh trong Brevo; mặc định = REPORT_TO_EMAIL
-//   REPORT_FROM_NAME   tuỳ chọn, mặc định "Quiz App"
-// Thiếu BREVO_API_KEY: báo cáo vẫn được lưu, chỉ không gửi mail (email_sent = false).
+// Cách gửi mail (ưu tiên theo thứ tự):
+//   1. Cloudflare Worker `quiz-report-mail` (thư mục cloudflare/report-mail-worker), dùng
+//      Cloudflare Email Routing. Cần secret REPORT_MAIL_SECRET (giống secret của Worker);
+//      tuỳ chọn REPORT_MAIL_WORKER_URL, mặc định https://report-mail.phamnghiatrong.com
+//   2. Brevo API, nếu có secret BREVO_API_KEY (dự phòng; REPORT_TO_EMAIL, REPORT_FROM_EMAIL,
+//      REPORT_FROM_NAME tuỳ chọn).
+// Không có cách nào được cấu hình: báo cáo vẫn được lưu, chỉ không gửi mail (email_sent = false).
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -264,20 +264,42 @@ Deno.serve(async (req) => {
     return json({ error: status === 500 ? 'Không lưu được báo cáo, vui lòng thử lại.' : error.message }, status);
   }
 
-  const apiKey = Deno.env.get('BREVO_API_KEY');
-  const toEmail = Deno.env.get('REPORT_TO_EMAIL') || 'tp058235@gmail.com';
-  const fromEmail = Deno.env.get('REPORT_FROM_EMAIL') || toEmail;
-  const fromName = Deno.env.get('REPORT_FROM_NAME') || 'Quiz App';
-
+  const mail = buildEmail(report, context);
+  const reporter = report.reporter || {};
   let emailed = false;
   let emailError: string | null = null;
 
-  if (!apiKey) {
-    emailError = 'BREVO_API_KEY chưa được cấu hình';
-  } else {
+  const workerSecret = Deno.env.get('REPORT_MAIL_SECRET');
+  const workerUrl = Deno.env.get('REPORT_MAIL_WORKER_URL') || 'https://report-mail.phamnghiatrong.com';
+  const brevoKey = Deno.env.get('BREVO_API_KEY');
+
+  if (workerSecret) {
+    // 1. Cloudflare Worker (Email Routing)
     try {
-      const mail = buildEmail(report, context);
-      const reporter = report.reporter || {};
+      const res = await fetch(workerUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${workerSecret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+          reply_to: reporter.email ? { email: reporter.email, name: reporter.name || '' } : null,
+        }),
+      });
+      if (res.ok) {
+        emailed = true;
+      } else {
+        emailError = `Cloudflare ${res.status}: ${(await res.text()).slice(0, 300)}`;
+      }
+    } catch (err) {
+      emailError = `Cloudflare: ${String((err as Error)?.message || err).slice(0, 300)}`;
+    }
+  } else if (brevoKey) {
+    // 2. Brevo (dự phòng)
+    const toEmail = Deno.env.get('REPORT_TO_EMAIL') || 'tp058235@gmail.com';
+    const fromEmail = Deno.env.get('REPORT_FROM_EMAIL') || toEmail;
+    const fromName = Deno.env.get('REPORT_FROM_NAME') || 'Quiz App';
+    try {
       const body: Record<string, unknown> = {
         sender: { name: fromName, email: fromEmail },
         to: [{ email: toEmail }],
@@ -287,10 +309,9 @@ Deno.serve(async (req) => {
         tags: ['question-report'],
       };
       if (reporter.email) body.replyTo = { email: reporter.email, name: reporter.name || reporter.email };
-
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
-        headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'api-key': brevoKey, 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(body),
       });
       if (res.ok) {
@@ -299,8 +320,10 @@ Deno.serve(async (req) => {
         emailError = `Brevo ${res.status}: ${(await res.text()).slice(0, 300)}`;
       }
     } catch (err) {
-      emailError = `Lỗi gửi mail: ${String((err as Error)?.message || err).slice(0, 300)}`;
+      emailError = `Brevo: ${String((err as Error)?.message || err).slice(0, 300)}`;
     }
+  } else {
+    emailError = 'Chưa cấu hình gửi mail (thiếu REPORT_MAIL_SECRET và BREVO_API_KEY)';
   }
 
   if (emailError) console.error('report-question email', emailError);

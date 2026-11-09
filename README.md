@@ -15,7 +15,8 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `menu.css` | Menu ngang, Trang chủ (video, chân trang), tab Tiếng Anh, Tùy chỉnh, luật "mỗi trang một lớp khung" |
 | `group.css` | Giao diện Học nhóm, nạp sau `menu.css` |
 | `report.css` | Nút Báo cáo ở màn làm bài và hộp thoại báo cáo, nạp sau `group.css` |
-| `supabase/functions/report-question/` | Edge Function nhận báo cáo câu hỏi và gửi email qua Brevo |
+| `supabase/functions/report-question/` | Edge Function nhận báo cáo câu hỏi, gửi email qua Cloudflare Worker (dự phòng Brevo) |
+| `cloudflare/report-mail-worker/` | Cloudflare Worker gửi email báo cáo bằng Email Routing, xem README trong thư mục |
 | `reset-password.html` / `reset-password.js` | Trang đặt lại mật khẩu từ email |
 | `sw.js` | Service worker (PWA, cache offline) |
 | `manifest.webmanifest` | Khai báo PWA (tên, icon, theme) |
@@ -134,12 +135,14 @@ Luồng: nút `#reportQuestionBtn` (chỉ hiện khi đang hiển thị một c�
 `submit_question_report` bằng JWT của người dùng -> RPC kiểm tra, chống spam (15 báo cáo/giờ,
 cùng một câu cách nhau 5 phút), lưu vào `question_reports` kèm ảnh chụp câu hỏi lấy từ DB ->
 Edge Function dựng email theo mục (vấn đề, câu hỏi, phương án và đáp án, người báo cáo, gợi ý
-SQL sửa nhanh) và gửi qua Brevo API.
+SQL sửa nhanh) và gửi qua Cloudflare Worker `quiz-report-mail` (Email Routing, người gửi
+`bao-cao@phamnghiatrong.com`). Brevo chỉ là dự phòng khi chưa đặt `REPORT_MAIL_SECRET`.
 
 - DB: `migrations/2026-11-bao-cao-cau-hoi.sql` (đã có trong `schema.sql`).
-- Secrets của Edge Function (Dashboard > Edge Functions > Secrets): `BREVO_API_KEY` (bắt buộc),
-  `REPORT_TO_EMAIL`, `REPORT_FROM_EMAIL` (sender đã xác minh trong Brevo), `REPORT_FROM_NAME`.
-  Thiếu `BREVO_API_KEY` thì báo cáo vẫn lưu, cột `email_sent = false`.
+- Secrets của Edge Function (Dashboard > Edge Functions > Secrets): `REPORT_MAIL_SECRET` (giống
+  secret của Worker; tuỳ chọn `REPORT_MAIL_WORKER_URL`). Dự phòng: `BREVO_API_KEY`.
+  Chưa đặt secret nào thì báo cáo vẫn lưu, cột `email_sent = false`, lý do ở `email_error`.
+- Cài Worker: `cloudflare/report-mail-worker/README.md`.
 - Xem báo cáo chưa xử lý: `select * from question_reports where status = 'new' order by created_at desc;`
   Xử lý xong: `update question_reports set status = 'resolved', resolved_at = now() where id = '...';`
 - Mã loại vấn đề (`REPORT_CATEGORIES` trong `app.js`, `v_allowed` trong RPC, `CATEGORY_LABELS`
