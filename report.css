@@ -198,3 +198,37 @@
     padding: 16px;
   }
 }
+
+/* ---------- Trang Góp ý: chọn loại góp ý + dòng trạng thái gửi ---------- */
+#feedbackSection .feedback-category-label {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto -14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+#feedbackSection #feedbackCategory {
+  width: 100% !important;
+  max-width: 860px !important;
+  margin: 0 auto !important;
+  box-sizing: border-box !important;
+}
+
+#feedbackSection .feedback-status {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+#feedbackSection .feedback-status[hidden] {
+  display: none !important;
+}
+
+#feedbackSection .feedback-status[data-variant="success"] {
+  color: var(--app-ok) !important;
+}
+
+#feedbackSection .feedback-status[data-variant="error"] {
+  color: var(--app-bad) !important;
+}

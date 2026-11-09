@@ -80,7 +80,7 @@
     <link rel="stylesheet" href="./theme.css?v=20261104-2" />
     <link rel="stylesheet" href="./menu.css?v=20261106-1" />
     <link rel="stylesheet" href="./group.css?v=20261104-1" />
-    <link rel="stylesheet" href="./report.css?v=20261109-1" />
+    <link rel="stylesheet" href="./report.css?v=20261109-2" />
     <style>
       /* Đảm bảo thuộc tính hidden luôn có tác dụng và không bị ghi đè bởi CSS khác */
       html body [hidden] {
@@ -594,6 +594,7 @@
                         <p><strong>Thông tin đã cập nhật:</strong></p>
                         <ul class="about-list">
                           <li>Thêm nút Báo cáo ở góc trên bên phải màn làm bài: chọn vấn đề của câu hỏi (đáp án sai, đề bài lỗi, phương án bị lặp hoặc chép nhầm, nhiều hoặc không có đáp án đúng, giải thích sai, sai môn hoặc sai bài, lỗi hiển thị, vấn đề khác), có thể chọn đáp án mà bạn cho là đúng và ghi thêm mô tả. Báo cáo được gửi thẳng về email của tác giả.</li>
+                          <li>Góp ý gửi thẳng tới tác giả ngay trong app, không phải mở Gmail nữa. Có thêm ô chọn loại góp ý (tính năng mới, giao diện, báo lỗi, nội dung câu hỏi, khác).</li>
                           <li>Danh sách chọn bài/phần được gom nhóm và sắp xếp theo số bài (Units 4-6 đứng trước Units 10-12), bài lẻ như Đề cương ôn tập xếp sau.</li>
                         </ul>
                       </div>
@@ -789,12 +790,20 @@
         <p class="eyebrow">Góp ý</p>
         <h3>Gửi góp ý về ứng dụng</h3>
         <div class="feedback-form">
+          <label for="feedbackCategory" class="feedback-category-label">Loại góp ý</label>
+          <select id="feedbackCategory" class="feedback-category">
+            <option value="feature">Đề xuất tính năng mới</option>
+            <option value="ui">Giao diện, trải nghiệm sử dụng</option>
+            <option value="bug">Báo lỗi ứng dụng</option>
+            <option value="content">Nội dung câu hỏi, môn học</option>
+            <option value="other" selected>Khác</option>
+          </select>
           <label for="feedbackInput">Nội dung góp ý</label>
-          <textarea id="feedbackInput" rows="5" placeholder="Nhập góp ý của bạn..."></textarea>
+          <textarea id="feedbackInput" rows="5" maxlength="3000" placeholder="Nhập góp ý của bạn..."></textarea>
           <button id="sendFeedbackBtn" class="primary-btn" type="button">Gửi góp ý</button>
+          <p id="feedbackStatus" class="feedback-status" role="status" aria-live="polite" hidden></p>
           <p class="muted-text">
-            Khi nhấn gửi, hệ thống sẽ mở ứng dụng Email trên thiết bị để gửi trực tiếp cho tác giả.
-            Tiêu đề mặc định sẽ là <strong>Góp ý về ứng dụng Quiz App</strong>.
+            Góp ý được gửi thẳng tới email của tác giả, kèm tên tài khoản của bạn để tác giả có thể phản hồi.
           </p>
         </div>
               </footer>
@@ -804,7 +813,7 @@
       </div>
       </div>
 
-    <script type="module" src="./app.js?v=20261109-4"></script>
+    <script type="module" src="./app.js?v=20261109-5"></script>
 
   </body>
 </html>

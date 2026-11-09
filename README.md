@@ -16,6 +16,7 @@ Chỉ những file dưới đây là cần thiết để chạy ứng dụng:
 | `group.css` | Giao diện Học nhóm, nạp sau `menu.css` |
 | `report.css` | Nút Báo cáo ở màn làm bài và hộp thoại báo cáo, nạp sau `group.css` |
 | `supabase/functions/report-question/` | Edge Function nhận báo cáo câu hỏi, gửi email qua Cloudflare Worker (dự phòng Brevo) |
+| `supabase/functions/send-feedback/` | Edge Function nhận góp ý, lưu bảng `feedback_messages`, gửi email qua cùng Worker |
 | `cloudflare/report-mail-worker/` | Cloudflare Worker gửi email báo cáo bằng Email Routing, xem README trong thư mục |
 | `reset-password.html` / `reset-password.js` | Trang đặt lại mật khẩu từ email |
 | `sw.js` | Service worker (PWA, cache offline) |
@@ -147,6 +148,14 @@ SQL sửa nhanh) và gửi qua Cloudflare Worker `quiz-report-mail` (Email Routi
   Xử lý xong: `update question_reports set status = 'resolved', resolved_at = now() where id = '...';`
 - Mã loại vấn đề (`REPORT_CATEGORIES` trong `app.js`, `v_allowed` trong RPC, `CATEGORY_LABELS`
   trong Edge Function) phải khớp nhau ở cả 3 nơi.
+
+## Góp ý
+
+Đã đăng nhập: trang Góp ý gọi Edge Function `send-feedback` -> RPC `submit_feedback` (5 góp ý/giờ,
+chặn gửi trùng nội dung trong 10 phút, 5-3000 ký tự) lưu vào `feedback_messages` -> email qua
+Worker `quiz-report-mail`. Chưa đăng nhập: vẫn mở Gmail soạn sẵn như cũ.
+DB: `migrations/2026-11-gop-y.sql` (đã có trong `schema.sql`).
+Xem góp ý: `select created_at, category, content, email_sent from feedback_messages order by created_at desc;`
 
 ## Ghi chú kỹ thuật
 

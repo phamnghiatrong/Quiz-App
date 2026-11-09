@@ -163,6 +163,8 @@ const elements = {
   feedbackSection: document.getElementById('feedbackSection'),
     feedbackInput: document.getElementById('feedbackInput'),
   sendFeedbackBtn: document.getElementById('sendFeedbackBtn'),
+  feedbackCategory: document.getElementById('feedbackCategory'),
+  feedbackStatus: document.getElementById('feedbackStatus'),
 
   homeHero: document.getElementById('homeHero'),
   homeHeroMedia: document.getElementById('homeHeroMedia'),
@@ -2078,45 +2080,89 @@ function cancelEditName() {
 }
 
 
-function sendFeedbackEmail() {
-  const content = elements.feedbackInput?.value?.trim() || '';
+function setFeedbackStatus(text, variant = '') {
+  const el = elements.feedbackStatus;
+  if (!el) return;
+  el.textContent = text || '';
+  el.hidden = !text;
+  el.dataset.variant = variant;
+}
 
-  if (!content) {
-    alert('Vui lòng nhập nội dung góp ý.');
-    elements.feedbackInput?.focus();
-    return;
-  }
-
+// Chưa đăng nhập: không gọi được server (cần JWT), nên vẫn mở Gmail soạn sẵn như trước.
+function openFeedbackInGmail(content) {
   const to = 'phamnghiatrong1412@gmail.com';
   const subject = 'Góp ý về ứng dụng Quiz App';
-
-  const userLine = isAuthed()
-    ? `Tài khoản: ${currentUserDisplayName}`
-    : 'Tài khoản: (chưa đăng nhập)';
-
-  const body = `${userLine}\n\nNội dung góp ý:\n${content}`;
-
-  // Mở Gmail với email, tiêu đề, nội dung đã điền sẵn
+  const body = `Tài khoản: (chưa đăng nhập)\n\nNội dung góp ý:\n${content}`;
   const gmailUrl =
     `https://mail.google.com/mail/?view=cm&fs=1` +
     `&to=${encodeURIComponent(to)}` +
     `&su=${encodeURIComponent(subject)}` +
     `&body=${encodeURIComponent(body)}`;
-
-  // Dự phòng nếu trình duyệt chặn mở tab mới
   const mailtoUrl =
     `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
   const newWindow = window.open(gmailUrl, '_blank');
+  if (!newWindow) window.location.href = mailtoUrl;
+}
 
-  if (!newWindow) {
-    window.location.href = mailtoUrl;
+// Đã đăng nhập: gửi thẳng qua Edge Function send-feedback (lưu bảng feedback_messages rồi gửi
+// email cho tác giả qua Cloudflare Worker), không phải mở Gmail.
+let feedbackSending = false;
+
+async function sendFeedbackEmail() {
+  if (feedbackSending) return;
+  const content = elements.feedbackInput?.value?.trim() || '';
+
+  if (content.length < 5) {
+    setFeedbackStatus('Vui lòng nhập nội dung góp ý (ít nhất 5 ký tự).', 'error');
+    elements.feedbackInput?.focus();
+    return;
+  }
+
+  if (!isAuthed() || !supabase) {
+    openFeedbackInGmail(content);
+    return;
+  }
+
+  const btn = elements.sendFeedbackBtn;
+  feedbackSending = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Đang gửi...';
+  }
+  setFeedbackStatus('');
+
+  try {
+    const { error } = await supabase.functions.invoke('send-feedback', {
+      body: {
+        content,
+        category: elements.feedbackCategory?.value || 'other',
+        context: {
+          app_version: (document.querySelector('#versionFooter p')?.textContent || '')
+            .replace(/\s+/g, ' ').trim().slice(0, 60),
+          user_agent: navigator.userAgent.slice(0, 300),
+        },
+      },
+    });
+    if (error) {
+      setFeedbackStatus(await readFunctionError(error), 'error');
+      return;
+    }
+    if (elements.feedbackInput) elements.feedbackInput.value = '';
+    setFeedbackStatus('Đã gửi góp ý tới tác giả. Cảm ơn bạn!', 'success');
+  } catch (err) {
+    setFeedbackStatus(err?.message || 'Không gửi được góp ý, vui lòng thử lại.', 'error');
+  } finally {
+    feedbackSending = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Gửi góp ý';
+    }
   }
 }
 
 // ---------- Báo cáo câu hỏi (nút "Báo cáo" góc trên bên phải màn làm bài) ----------
 // Gửi lên Edge Function `report-question`: lưu vào bảng question_reports rồi gửi email cho
-// tác giả qua Brevo. Mã loại vấn đề phải khớp danh sách trong RPC submit_question_report.
+// tác giả qua Cloudflare Worker. Mã loại vấn đề phải khớp danh sách trong RPC submit_question_report.
 const REPORT_CATEGORIES = [
   { key: 'wrong_answer', label: 'Đáp án đúng bị sai' },
   { key: 'question_error', label: 'Đề bài sai, thiếu chữ hoặc lỗi chính tả' },
@@ -2162,7 +2208,7 @@ async function readFunctionError(error) {
     if (body?.error) return body.error;
   } catch (_) { /* bỏ qua */ }
   if (!navigator.onLine) return 'Mất kết nối mạng. Vui lòng thử lại.';
-  return 'Không gửi được báo cáo, vui lòng thử lại sau.';
+  return 'Không gửi được, vui lòng thử lại sau.';
 }
 
 function openReportQuestionDialog() {
