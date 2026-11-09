@@ -1628,6 +1628,7 @@ function cancelEditStudentCode() {
 // - So sánh có số (numeric): "Units 4-6" đứng trước "Units 10-12".
 // - Trong nhóm: Unit/Units trước, Review sau, rồi các bài khác.
 // - Thứ tự nhóm: Giáo trình, Extra, Đề cương, rồi các nhóm khác theo tên.
+// - Bài lẻ (không thuộc nhóm nào, vd Đề cương ôn tập) xếp sau các nhóm.
 const LESSON_GROUP_ORDER = [/^giáo trình/i, /^extra/i, /^đề cương/i];
 const lessonCollator = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
 
@@ -1694,7 +1695,7 @@ function lessonOptionsHtml(rows) {
     })
     .join('');
 
-  return looseHtml + groupHtml;
+  return groupHtml + looseHtml;
 }
 
 async function loadLessons(slug) {
