@@ -13,10 +13,11 @@ https://report-mail.phamnghiatrong.com (Worker) --(send_email binding)--> Gmail 
 
 ## Cài đặt lần đầu
 
-1. **Bật Email Routing**: Cloudflare Dashboard > tên miền `phamnghiatrong.com` > Email > Email Routing >
-   Get started / Enable. Cho Cloudflare tự thêm bản ghi MX, SPF, DKIM.
-2. **Xác minh hộp thư nhận**: Email Routing > Destination addresses > Add `tp058235@gmail.com`,
-   mở Gmail bấm link xác minh. Trạng thái phải là Verified.
+1. **Bật Email Routing**: Cloudflare Dashboard (dash.cloudflare.com) > menu trái **Compute** >
+   **Email Service** > **Email Routing** > chọn `phamnghiatrong.com` > bật / Enable. Cho Cloudflare tự
+   thêm bản ghi MX, SPF, DKIM. (Giao diện cũ: chọn tên miền > Email > Email Routing.)
+2. **Xác minh hộp thư nhận**: cùng trang Email Routing > tab **Destination Addresses** > nhập
+   `tp058235@gmail.com`, mở Gmail bấm **Verify email address**. Trạng thái phải là Verified.
 3. **Tạo secret** (PowerShell, chạy 1 lần, copy kết quả):
    ```powershell
    -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 40 | ForEach-Object {[char]$_})
